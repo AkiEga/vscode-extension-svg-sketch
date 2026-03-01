@@ -280,6 +280,28 @@ export class DiagramPanel {
       border-radius: 3px; font-size: 12px;
     }
     #table-toolbar button:hover { background: var(--vscode-button-secondaryHoverBackground); }
+
+    .ctx-menu {
+      position: absolute;
+      z-index: 30;
+      background: var(--vscode-menu-background, var(--vscode-editorWidget-background, #fff));
+      color: var(--vscode-menu-foreground, var(--vscode-editor-foreground, #000));
+      border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, #ccc));
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      padding: 4px 0;
+      min-width: 140px;
+      font-size: 12px;
+    }
+    .ctx-menu-item {
+      padding: 4px 16px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .ctx-menu-item:hover {
+      background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground, #094771));
+      color: var(--vscode-menu-selectionForeground, var(--vscode-list-hoverForeground, #fff));
+    }
   </style>
 </head>
 <body>

@@ -1,7 +1,7 @@
 {
   "name": "markdown-svg-sketch",
-  "displayName": "Markdown SVG Sketch",
-  "description": "A simple shape editor for creating SVG diagrams while writing Markdown in VS Code",
+  "displayName": "SVG Sketch",
+  "description": "A simple shape editor for creating and editing SVG diagrams in VS Code",
   "version": "0.0.1",
   "license": "MIT",
   "engines": {
@@ -16,42 +16,12 @@
     "commands": [
       {
         "command": "markdown-svg-sketch.newDiagram",
-        "title": "Markdown SVG Sketch: New Diagram"
-      },
-      {
-        "command": "markdown-svg-sketch.editSvg",
-        "title": "Markdown SVG Sketch: Edit SVG"
+        "title": "SVG Sketch: New SVG"
       }
     ],
-    "menus": {
-      "editor/context": [
-        {
-          "command": "markdown-svg-sketch.newDiagram",
-          "when": "editorTextFocus && resourceExtname == .md",
-          "group": "markdown-svg-sketch"
-        }
-      ],
-      "explorer/context": [
-        {
-          "command": "markdown-svg-sketch.editSvg",
-          "when": "resourceExtname == .svg",
-          "group": "markdown-svg-sketch"
-        }
-      ]
-    },
     "configuration": {
-      "title": "Markdown SVG Sketch",
+      "title": "SVG Sketch",
       "properties": {
-        "markdown-svg-sketch.imgDir": {
-          "type": "string",
-          "default": "img",
-          "description": "Directory to save SVG files (relative to the Markdown file)"
-        },
-        "markdown-svg-sketch.filePrefix": {
-          "type": "string",
-          "default": "diagram",
-          "description": "Prefix for generated SVG file names"
-        },
         "markdown-svg-sketch.templateDir": {
           "type": "string",
           "default": ".markdown-svg-sketch/templates",
@@ -68,7 +38,7 @@
             "filenamePattern": "*.svg"
           }
         ],
-        "priority": "option"
+        "priority": "default"
       }
     ]
   },

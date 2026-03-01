@@ -1,5 +1,6 @@
 import type { Shape, ToolType, DrawStyle, Point, Tool } from "../shared";
-import type { TableShape } from "../../src/types";
+import { hitTest } from "../shared";
+import type { TableShape, TextShape } from "../../src/types";
 import { RectTool } from "./tools/RectTool";
 import { EllipseTool } from "./tools/EllipseTool";
 import { ArrowTool } from "./tools/ArrowTool";
@@ -35,7 +36,7 @@ export class CanvasEditor {
     this.selectTool = new SelectTool(this.shapes, (id) => {
       this.selectedId = id;
       this.onSelectionChange(id);
-    });
+    }, () => this.pushUndo());
     this.currentTool = new RectTool();
     this.setupEvents();
     this.resize();
@@ -76,10 +77,25 @@ export class CanvasEditor {
         break;
     }
     this.canvas.className = toolType === "select" ? "tool-select" : "";
+    if (toolType !== "select") {
+      this.canvas.style.cursor = "";
+    }
   }
 
   setStyle(style: Partial<DrawStyle>): void {
     Object.assign(this.style, style);
+    // Apply style changes to currently selected shape
+    if (this.selectedId) {
+      const shape = this.shapes.find((s) => s.id === this.selectedId);
+      if (shape) {
+        this.pushUndo();
+        if (style.stroke !== undefined) { shape.stroke = style.stroke; }
+        if (style.fill !== undefined) { shape.fill = style.fill; }
+        if (style.lineWidth !== undefined) { shape.lineWidth = style.lineWidth; }
+        this.onChange();
+        this.render();
+      }
+    }
   }
 
   setOnSelectionChange(cb: (id: string | undefined) => void): void {
@@ -104,7 +120,7 @@ export class CanvasEditor {
     this.selectTool = new SelectTool(this.shapes, (id) => {
       this.selectedId = id;
       this.onSelectionChange(id);
-    });
+    }, () => this.pushUndo());
     if (this.currentToolType === "select") {
       this.currentTool = this.selectTool;
     }
@@ -179,6 +195,7 @@ export class CanvasEditor {
     this.canvas.addEventListener("mousedown", (e) => this.onMouseDown(e));
     this.canvas.addEventListener("mousemove", (e) => this.onMouseMove(e));
     this.canvas.addEventListener("mouseup", (e) => this.onMouseUp(e));
+    this.canvas.addEventListener("dblclick", (e) => this.onDoubleClick(e));
     this.canvas.addEventListener("contextmenu", (e) => this.onContextMenu(e));
 
     window.addEventListener("resize", () => {
@@ -207,12 +224,18 @@ export class CanvasEditor {
   }
 
   private onMouseDown(e: MouseEvent): void {
+    if (e.button !== 0) { return; } // Only handle left button
     this.isDragging = true;
     this.currentTool.onMouseDown(this.getPoint(e), this.style);
     this.render();
   }
 
   private onMouseMove(e: MouseEvent): void {
+    // Update cursor based on handle hover (even when not dragging)
+    if (this.currentToolType === "select" && !this.isDragging) {
+      const cursor = this.selectTool.getCursorAt(this.getPoint(e));
+      this.canvas.style.cursor = cursor ?? "default";
+    }
     if (!this.isDragging) { return; }
     this.currentTool.onMouseMove(this.getPoint(e));
     this.render();
@@ -221,12 +244,16 @@ export class CanvasEditor {
   private onMouseUp(e: MouseEvent): void {
     if (!this.isDragging) { return; }
     this.isDragging = false;
+    const wasDraggingSelect = this.currentToolType === "select";
     const shape = this.currentTool.onMouseUp(this.getPoint(e));
     if (shape) {
       this.pushUndo();
       this.shapes.push(shape);
       this.onChange();
       this.switchToSelect();
+    } else if (wasDraggingSelect && this.selectedId) {
+      // Notify change after move / resize (undo was pushed by SelectTool)
+      this.onChange();
     }
     this.render();
   }
@@ -467,21 +494,150 @@ export class CanvasEditor {
     this.render();
   }
 
-  private onContextMenu(e: MouseEvent): void {
-    e.preventDefault();
-    if (!this.selectedId) { return; }
-    const shape = this.shapes.find((s) => s.id === this.selectedId);
+  private onDoubleClick(e: MouseEvent): void {
+    const pt = this.getPoint(e);
+    const shape = this.findShapeAt(pt);
     if (!shape) { return; }
 
+    this.selectShape(shape);
+    this.openShapeEditor(shape, pt);
+  }
+
+  private onContextMenu(e: MouseEvent): void {
+    e.preventDefault();
     const pt = this.getPoint(e);
-    if (shape.type === "text") {
-      this.editTextShape(shape);
-    } else if (shape.type === "table") {
-      this.editTableCell(shape, pt);
+    const shape = this.findShapeAt(pt);
+    if (!shape) { return; }
+
+    this.selectShape(shape);
+    this.showContextMenu(shape, pt, e);
+  }
+
+  private selectShape(shape: Shape): void {
+    this.selectedId = shape.id;
+    this.onSelectionChange(shape.id);
+    if (this.currentToolType !== "select") {
+      this.switchToSelect();
+    }
+    this.render();
+  }
+
+  /** Open inline editor appropriate for the shape type */
+  private openShapeEditor(shape: Shape, pt: Point): void {
+    switch (shape.type) {
+      case "text":
+        this.editTextShape(shape);
+        break;
+      case "table":
+        this.editTableCell(shape, pt);
+        break;
+      // rect, ellipse, arrow: no double-click editor — use drag handles
     }
   }
 
-  private editTextShape(shape: import("../../src/types").TextShape): void {
+  /** Show a context menu at the given screen position */
+  private showContextMenu(shape: Shape, pt: Point, e: MouseEvent): void {
+    this.dismissPopup();
+
+    const container = this.canvas.parentElement!;
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const contRect = container.getBoundingClientRect();
+
+    const menu = document.createElement("div");
+    menu.className = "ctx-menu";
+    menu.style.left = `${canvasRect.left - contRect.left + pt.x}px`;
+    menu.style.top = `${canvasRect.top - contRect.top + pt.y}px`;
+
+    const items: { label: string; action: () => void }[] = [];
+
+    // Shape-specific edit entry
+    switch (shape.type) {
+      case "text":
+        items.push({ label: "Edit Text", action: () => this.editTextShape(shape as TextShape) });
+        break;
+      case "table":
+        items.push({ label: "Edit Cell", action: () => this.editTableCell(shape as TableShape, pt) });
+        break;
+      // rect, ellipse, arrow: resized via drag handles — no panel needed
+    }
+
+    items.push({ label: "Bring to Front", action: () => this.bringToFront(shape) });
+    items.push({ label: "Send to Back", action: () => this.sendToBack(shape) });
+    items.push({ label: "Delete", action: () => this.deleteSelected() });
+
+    for (const item of items) {
+      const btn = document.createElement("div");
+      btn.className = "ctx-menu-item";
+      btn.textContent = item.label;
+      btn.addEventListener("mousedown", (ev) => {
+        ev.stopPropagation();
+        cleanup();
+        item.action();
+      });
+      menu.appendChild(btn);
+    }
+
+    container.appendChild(menu);
+
+    const cleanup = () => {
+      this.activePopupCleanup = undefined;
+      window.removeEventListener("mousedown", onOutside);
+      window.removeEventListener("keydown", onEsc);
+      if (menu.parentElement) { menu.parentElement.removeChild(menu); }
+    };
+    const onOutside = (ev: MouseEvent) => {
+      if (!menu.contains(ev.target as Node)) { cleanup(); }
+    };
+    const onEsc = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") { cleanup(); }
+    };
+    // Delay listener so the current right-click doesn't immediately close the menu
+    requestAnimationFrame(() => {
+      window.addEventListener("mousedown", onOutside);
+      window.addEventListener("keydown", onEsc);
+    });
+    this.activePopupCleanup = cleanup;
+  }
+
+  private bringToFront(shape: Shape): void {
+    const idx = this.shapes.indexOf(shape);
+    if (idx < 0 || idx === this.shapes.length - 1) { return; }
+    this.pushUndo();
+    this.shapes.splice(idx, 1);
+    this.shapes.push(shape);
+    this.onChange();
+    this.render();
+  }
+
+  private sendToBack(shape: Shape): void {
+    const idx = this.shapes.indexOf(shape);
+    if (idx <= 0) { return; }
+    this.pushUndo();
+    this.shapes.splice(idx, 1);
+    this.shapes.unshift(shape);
+    this.onChange();
+    this.render();
+  }
+
+  private dismissPopup(): void {
+    if (this.activePopupCleanup) {
+      this.activePopupCleanup();
+      this.activePopupCleanup = undefined;
+    }
+  }
+
+  private findShapeAt(pt: Point): Shape | undefined {
+    for (let i = this.shapes.length - 1; i >= 0; i--) {
+      if (hitTest(this.shapes[i], pt)) {
+        return this.shapes[i];
+      }
+    }
+    return undefined;
+  }
+
+  // --- Text editing ---
+
+  private editTextShape(shape: TextShape): void {
     const container = this.canvas.parentElement!;
     const rect = this.canvas.getBoundingClientRect();
     const contRect = container.getBoundingClientRect();

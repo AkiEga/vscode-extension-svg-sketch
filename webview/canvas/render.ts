@@ -1,4 +1,5 @@
 import type { Shape } from "../shared";
+import { getShapeHandles } from "./tools/SelectTool";
 
 const HANDLE_SIZE = 6;
 
@@ -175,46 +176,32 @@ function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Shape): vo
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 3]);
 
-  let x: number, y: number, w: number, h: number;
-  switch (shape.type) {
-    case "rect":
-      x = shape.x - 4; y = shape.y - 4;
-      w = shape.width + 8; h = shape.height + 8;
-      break;
-    case "ellipse":
-      x = shape.cx - shape.rx - 4; y = shape.cy - shape.ry - 4;
-      w = shape.rx * 2 + 8; h = shape.ry * 2 + 8;
-      break;
-    case "arrow": {
-      const minX = Math.min(shape.x1, shape.x2);
-      const minY = Math.min(shape.y1, shape.y2);
-      x = minX - 4; y = minY - 4;
-      w = Math.abs(shape.x2 - shape.x1) + 8;
-      h = Math.abs(shape.y2 - shape.y1) + 8;
-      break;
-    }
-    case "text":
-      x = shape.x - 4; y = shape.y - shape.fontSize - 4;
-      w = shape.text.length * shape.fontSize * 0.6 + 8;
-      h = shape.fontSize + 8;
-      break;
-    case "table":
-      x = shape.x - 4; y = shape.y - 4;
-      w = shape.width + 8; h = shape.height + 8;
-      break;
-  }
+  const h = getShapeHandles(shape);
+  const x = h.tl.x, y = h.tl.y;
+  const w = h.tr.x - h.tl.x, hh = h.bl.y - h.tl.y;
 
-  ctx.strokeRect(x!, y!, w!, h!);
+  ctx.strokeRect(x, y, w, hh);
 
-  // Draw handles
+  // Draw corner handles
   ctx.setLineDash([]);
   ctx.fillStyle = "#4a90d9";
-  const handles = [
-    [x!, y!], [x! + w!, y!],
-    [x!, y! + h!], [x! + w!, y! + h!],
-  ];
-  for (const [hx, hy] of handles) {
-    ctx.fillRect(hx - HANDLE_SIZE / 2, hy - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
+  const corners = [h.tl, h.tr, h.bl, h.br];
+  for (const c of corners) {
+    ctx.fillRect(c.x - HANDLE_SIZE / 2, c.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
+  }
+
+  // For arrows, also draw endpoint handles
+  if (shape.type === "arrow") {
+    ctx.fillStyle = "#d94a4a";
+    const endpoints = [
+      { x: shape.x1, y: shape.y1 },
+      { x: shape.x2, y: shape.y2 },
+    ];
+    for (const ep of endpoints) {
+      ctx.beginPath();
+      ctx.arc(ep.x, ep.y, HANDLE_SIZE, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   ctx.restore();
