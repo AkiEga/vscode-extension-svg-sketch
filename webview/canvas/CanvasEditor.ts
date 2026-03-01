@@ -1,30 +1,43 @@
 import type { Shape, ToolType, DrawStyle, Point, Tool } from "../shared";
-import { hitTest, TextShape, TableShape } from "../shared";
+import { hitTest, TextShape, TableShape, RectShape, EllipseShape, ArrowShape, BubbleShape, nextId } from "../shared";
 import { RectTool } from "./tools/RectTool";
 import { EllipseTool } from "./tools/EllipseTool";
 import { ArrowTool } from "./tools/ArrowTool";
+import { BubbleTool } from "./tools/BubbleTool";
 import { TextTool } from "./tools/TextTool";
 import { TableTool, type TableConfigRequest } from "./tools/TableTool";
 import { SelectTool } from "./tools/SelectTool";
 import { renderShapes } from "./render";
 import { prepareTemplateInsertion } from "./templateInsert";
 
+/** Snap a value to the nearest grid line */
+function snapValue(value: number, gridSize: number): number {
+  return Math.round(value / gridSize) * gridSize;
+}
+
 export class CanvasEditor {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private shapes: Shape[] = [];
-  private currentToolType: ToolType = "rect";
+  private currentToolType: ToolType = "select";
   private currentTool: Tool;
   private style: DrawStyle = { stroke: "#000000", fill: "#ffffff", lineWidth: 2 };
   private isDragging = false;
-  private selectedId: string | undefined;
+  private selectedIds: Set<string> = new Set();
   private selectTool: SelectTool;
 
   // Undo/Redo
   private undoStack: Shape[][] = [];
   private redoStack: Shape[][] = [];
 
-  private onSelectionChange: (id: string | undefined) => void = () => {};
+  // Copy/Paste clipboard
+  private clipboard: Shape[] = [];
+
+  // Grid snap
+  private _snapToGrid = true;
+  private _gridSize = 20;
+
+  private onSelectionChange: (ids: Set<string>) => void = () => {};
   private onChange: () => void = () => {};
   private onToolChange: (tool: ToolType) => void = () => {};
   private activePopupCleanup: (() => void) | undefined;
@@ -32,11 +45,12 @@ export class CanvasEditor {
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d")!;
-    this.selectTool = new SelectTool(this.shapes, (id) => {
-      this.selectedId = id;
-      this.onSelectionChange(id);
+    this.selectTool = new SelectTool(this.shapes, (ids) => {
+      this.selectedIds = new Set(ids);
+      this.onSelectionChange(new Set(ids));
     }, () => this.pushUndo());
-    this.currentTool = new RectTool();
+    this.currentTool = this.selectTool;
+    this.canvas.className = "tool-select";
     this.setupEvents();
     this.resize();
     this.render();
@@ -58,6 +72,9 @@ export class CanvasEditor {
         break;
       case "arrow":
         this.currentTool = new ArrowTool();
+        break;
+      case "bubble":
+        this.currentTool = new BubbleTool();
         break;
       case "text": {
         const textTool = new TextTool();
@@ -83,21 +100,23 @@ export class CanvasEditor {
 
   setStyle(style: Partial<DrawStyle>): void {
     Object.assign(this.style, style);
-    // Apply style changes to currently selected shape
-    if (this.selectedId) {
-      const shape = this.shapes.find((s) => s.id === this.selectedId);
-      if (shape) {
+    // Apply style changes to currently selected shapes
+    if (this.selectedIds.size > 0) {
+      const targets = this.shapes.filter((s) => this.selectedIds.has(s.id));
+      if (targets.length > 0) {
         this.pushUndo();
-        if (style.stroke !== undefined) { shape.stroke = style.stroke; }
-        if (style.fill !== undefined) { shape.fill = style.fill; }
-        if (style.lineWidth !== undefined) { shape.lineWidth = style.lineWidth; }
+        for (const shape of targets) {
+          if (style.stroke !== undefined) { shape.stroke = style.stroke; }
+          if (style.fill !== undefined) { shape.fill = style.fill; }
+          if (style.lineWidth !== undefined) { shape.lineWidth = style.lineWidth; }
+        }
         this.onChange();
         this.render();
       }
     }
   }
 
-  setOnSelectionChange(cb: (id: string | undefined) => void): void {
+  setOnSelectionChange(cb: (ids: Set<string>) => void): void {
     this.onSelectionChange = cb;
   }
 
@@ -116,9 +135,9 @@ export class CanvasEditor {
   setShapes(shapes: Shape[]): void {
     this.shapes.length = 0;
     this.shapes.push(...shapes);
-    this.selectTool = new SelectTool(this.shapes, (id) => {
-      this.selectedId = id;
-      this.onSelectionChange(id);
+    this.selectTool = new SelectTool(this.shapes, (ids) => {
+      this.selectedIds = new Set(ids);
+      this.onSelectionChange(new Set(ids));
     }, () => this.pushUndo());
     if (this.currentToolType === "select") {
       this.currentTool = this.selectTool;
@@ -137,24 +156,67 @@ export class CanvasEditor {
     this.pushUndo();
     this.shapes.push(...prepared.shapes);
     const insertedIds = prepared.insertedIds;
-    this.selectedId = insertedIds[insertedIds.length - 1];
-    this.onSelectionChange(this.selectedId);
+    this.selectedIds = new Set(insertedIds);
+    this.onSelectionChange(new Set(this.selectedIds));
     this.onChange();
     this.render();
     return insertedIds;
   }
 
   deleteSelected(): void {
-    if (!this.selectedId) { return; }
+    if (this.selectedIds.size === 0) { return; }
     this.pushUndo();
-    this.shapes.splice(
-      this.shapes.findIndex((s) => s.id === this.selectedId),
-      1,
-    );
-    this.selectedId = undefined;
-    this.onSelectionChange(undefined);
+    const idsToDelete = new Set(this.selectedIds);
+    for (let i = this.shapes.length - 1; i >= 0; i--) {
+      if (idsToDelete.has(this.shapes[i].id)) {
+        this.shapes.splice(i, 1);
+      }
+    }
+    this.selectedIds.clear();
+    this.onSelectionChange(new Set());
     this.onChange();
     this.render();
+  }
+
+  // --- Copy/Paste ---
+
+  copySelected(): void {
+    if (this.selectedIds.size === 0) { return; }
+    this.clipboard = this.shapes
+      .filter((s) => this.selectedIds.has(s.id))
+      .map((s) => s.clone());
+  }
+
+  paste(): void {
+    if (this.clipboard.length === 0) { return; }
+    this.pushUndo();
+    const pasteOffset = 20;
+    const newIds: string[] = [];
+    for (const original of this.clipboard) {
+      const id = nextId();
+      const copy = original.clone(id).translate(pasteOffset, pasteOffset);
+      this.shapes.push(copy);
+      newIds.push(id);
+    }
+    // Update clipboard so next paste offsets further
+    this.clipboard = this.clipboard.map((s) => s.translate(pasteOffset, pasteOffset));
+    this.selectedIds = new Set(newIds);
+    this.onSelectionChange(new Set(this.selectedIds));
+    this.onChange();
+    this.render();
+  }
+
+  // --- Grid snap ---
+
+  get snapToGrid(): boolean { return this._snapToGrid; }
+  set snapToGrid(v: boolean) { this._snapToGrid = v; }
+
+  get gridSize(): number { return this._gridSize; }
+  set gridSize(v: number) { this._gridSize = Math.max(1, v); }
+
+  toggleSnap(): boolean {
+    this._snapToGrid = !this._snapToGrid;
+    return this._snapToGrid;
   }
 
   undo(): void {
@@ -190,6 +252,49 @@ export class CanvasEditor {
     return this.shapes.map(s => s.clone());
   }
 
+  private snapSelectedShapesToGrid(): void {
+    for (const shape of this.shapes) {
+      if (this.selectedIds.has(shape.id)) {
+        this.snapShapeToGrid(shape);
+      }
+    }
+  }
+
+  private snapShapeToGrid(shape: Shape): void {
+    const gs = this._gridSize;
+    const minDiameter = gs;
+    const minRadius = Math.max(1, gs / 2);
+
+    if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TableShape) {
+      shape.x = snapValue(shape.x, gs);
+      shape.y = snapValue(shape.y, gs);
+      shape.width = Math.max(minDiameter, snapValue(shape.width, gs));
+      shape.height = Math.max(minDiameter, snapValue(shape.height, gs));
+      return;
+    }
+
+    if (shape instanceof EllipseShape) {
+      shape.cx = snapValue(shape.cx, gs);
+      shape.cy = snapValue(shape.cy, gs);
+      shape.rx = Math.max(minRadius, snapValue(shape.rx, gs));
+      shape.ry = Math.max(minRadius, snapValue(shape.ry, gs));
+      return;
+    }
+
+    if (shape instanceof ArrowShape) {
+      shape.x1 = snapValue(shape.x1, gs);
+      shape.y1 = snapValue(shape.y1, gs);
+      shape.x2 = snapValue(shape.x2, gs);
+      shape.y2 = snapValue(shape.y2, gs);
+      return;
+    }
+
+    if (shape instanceof TextShape) {
+      shape.x = snapValue(shape.x, gs);
+      shape.y = snapValue(shape.y, gs);
+    }
+  }
+
   private setupEvents(): void {
     this.canvas.addEventListener("mousedown", (e) => this.onMouseDown(e));
     this.canvas.addEventListener("mousemove", (e) => this.onMouseMove(e));
@@ -203,7 +308,7 @@ export class CanvasEditor {
     });
 
     window.addEventListener("keydown", (e) => {
-      if ((e.key === "Delete" || e.key === "Backspace") && this.selectedId) {
+      if ((e.key === "Delete" || e.key === "Backspace") && this.selectedIds.size > 0) {
         this.deleteSelected();
       }
       if (e.ctrlKey && e.key === "z") {
@@ -214,6 +319,26 @@ export class CanvasEditor {
         e.preventDefault();
         this.redo();
       }
+      if (e.ctrlKey && e.key === "c") {
+        e.preventDefault();
+        this.copySelected();
+      }
+      if (e.ctrlKey && e.key === "v") {
+        e.preventDefault();
+        this.paste();
+      }
+      if (e.key === "F2") {
+        e.preventDefault();
+        this.editSelectedShapeLabel();
+      }
+      if (e.ctrlKey && e.key.toLowerCase() === "g" && !e.shiftKey) {
+        e.preventDefault();
+        this.groupSelected();
+      }
+      if (e.ctrlKey && e.key.toLowerCase() === "g" && e.shiftKey) {
+        e.preventDefault();
+        this.ungroupSelected();
+      }
     });
   }
 
@@ -222,10 +347,22 @@ export class CanvasEditor {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
+  /** Tool input point: drawing tools are snapped, select tool uses raw coordinates. */
+  private getToolPoint(e: MouseEvent): Point {
+    const pt = this.getPoint(e);
+    if (!this._snapToGrid || this.currentToolType === "select") {
+      return pt;
+    }
+    return {
+      x: snapValue(pt.x, this._gridSize),
+      y: snapValue(pt.y, this._gridSize),
+    };
+  }
+
   private onMouseDown(e: MouseEvent): void {
     if (e.button !== 0) { return; } // Only handle left button
     this.isDragging = true;
-    this.currentTool.onMouseDown(this.getPoint(e), this.style);
+    this.currentTool.onMouseDown(this.getToolPoint(e), this.style, { shiftKey: e.shiftKey });
     this.render();
   }
 
@@ -236,7 +373,10 @@ export class CanvasEditor {
       this.canvas.style.cursor = cursor ?? "default";
     }
     if (!this.isDragging) { return; }
-    this.currentTool.onMouseMove(this.getPoint(e));
+    this.currentTool.onMouseMove(this.getToolPoint(e));
+    if (this._snapToGrid && this.currentToolType === "select") {
+      this.snapSelectedShapesToGrid();
+    }
     this.render();
   }
 
@@ -244,13 +384,19 @@ export class CanvasEditor {
     if (!this.isDragging) { return; }
     this.isDragging = false;
     const wasDraggingSelect = this.currentToolType === "select";
-    const shape = this.currentTool.onMouseUp(this.getPoint(e));
+    const shape = this.currentTool.onMouseUp(this.getToolPoint(e));
     if (shape) {
+      if (this._snapToGrid) {
+        this.snapShapeToGrid(shape);
+      }
       this.pushUndo();
       this.shapes.push(shape);
       this.onChange();
       this.switchToSelect();
-    } else if (wasDraggingSelect && this.selectedId) {
+    } else if (wasDraggingSelect && this.selectedIds.size > 0) {
+      if (this._snapToGrid) {
+        this.snapSelectedShapesToGrid();
+      }
       // Notify change after move / resize (undo was pushed by SelectTool)
       this.onChange();
     }
@@ -265,7 +411,8 @@ export class CanvasEditor {
 
   render(): void {
     const preview = this.currentTool.getPreview();
-    renderShapes(this.ctx, this.shapes, preview, this.selectedId);
+    const rubberBand = this.selectTool.getRubberband();
+    renderShapes(this.ctx, this.shapes, preview, this.selectedIds, rubberBand);
   }
 
   private showTextInput(pt: Point, style: DrawStyle): void {
@@ -297,8 +444,16 @@ export class CanvasEditor {
       committed = true;
       const text = input.value.trim();
       if (text) {
-        const textTool = new TextTool();
-        const shape = textTool.createShape(pt, style, text);
+        const shape = new TextShape({
+          id: nextId(),
+          x: pt.x,
+          y: pt.y,
+          text,
+          fontSize: 16,
+          stroke: style.stroke,
+          fill: style.stroke,
+          lineWidth: style.lineWidth,
+        });
         this.pushUndo();
         this.shapes.push(shape);
         this.onChange();
@@ -334,6 +489,91 @@ export class CanvasEditor {
     input.addEventListener("blur", onBlur);
 
     // Register so setTool() can cancel without committing
+    this.activePopupCleanup = cleanup;
+  }
+
+  editSelectedShapeLabel(): void {
+    const shape = this.getSelectedShape();
+    if (!shape) { return; }
+    if (shape.type === "table") {
+      this.editTableCell(shape, { x: shape.x + 1, y: shape.y + 1 });
+      return;
+    }
+    if (shape.type === "text") {
+      this.editTextShape(shape);
+      return;
+    }
+    if (shape.type === "rect" || shape.type === "ellipse" || shape.type === "arrow" || shape.type === "bubble") {
+      this.editShapeLabel(shape);
+    }
+  }
+
+  private editShapeLabel(shape: RectShape | EllipseShape | ArrowShape | BubbleShape): void {
+    const b = shape.getBounds();
+    const cx = (b.minX + b.maxX) / 2;
+    const cy = (b.minY + b.maxY) / 2;
+    const container = this.canvas.parentElement!;
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const contRect = container.getBoundingClientRect();
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = shape.label ?? "";
+    input.placeholder = "Label";
+    input.style.position = "absolute";
+    input.style.left = `${canvasRect.left - contRect.left + cx - 60}px`;
+    input.style.top = `${canvasRect.top - contRect.top + cy - 12}px`;
+    input.style.width = "120px";
+    input.style.fontSize = `${shape.labelFontSize ?? 16}px`;
+    input.style.fontFamily = "sans-serif";
+    input.style.border = "1px solid #007acc";
+    input.style.outline = "none";
+    input.style.padding = "2px 4px";
+    input.style.background = "#fff";
+    input.style.color = shape.stroke;
+    input.style.zIndex = "10";
+    container.appendChild(input);
+    input.focus();
+    input.select();
+
+    let committed = false;
+
+    const commit = () => {
+      if (committed) { return; }
+      committed = true;
+      const text = input.value.trim();
+      const nextLabel = text || undefined;
+      if (nextLabel !== shape.label) {
+        this.pushUndo();
+        shape.label = nextLabel;
+        shape.labelFontSize = shape.labelFontSize ?? 16;
+        this.onChange();
+        this.render();
+      }
+      cleanup();
+    };
+
+    const cleanup = () => {
+      this.activePopupCleanup = undefined;
+      input.removeEventListener("keydown", onKey);
+      input.removeEventListener("blur", onBlur);
+      if (input.parentElement) {
+        input.parentElement.removeChild(input);
+      }
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit();
+      } else if (e.key === "Escape") {
+        cleanup();
+      }
+    };
+    const onBlur = () => { commit(); };
+
+    input.addEventListener("keydown", onKey);
+    input.addEventListener("blur", onBlur);
     this.activePopupCleanup = cleanup;
   }
 
@@ -409,6 +649,9 @@ export class CanvasEditor {
       const rows = Math.max(1, Math.min(50, parseInt(rowsInput.value, 10) || 3));
       const cols = Math.max(1, Math.min(50, parseInt(colsInput.value, 10) || 3));
       const shape = TableTool.createShape(req.pt, req.width, req.height, req.style, rows, cols);
+      if (this._snapToGrid) {
+        this.snapShapeToGrid(shape);
+      }
       this.pushUndo();
       this.shapes.push(shape);
       this.onChange();
@@ -439,8 +682,38 @@ export class CanvasEditor {
   }
 
   getSelectedShape(): Shape | undefined {
-    if (!this.selectedId) { return undefined; }
-    return this.shapes.find((s) => s.id === this.selectedId);
+    if (this.selectedIds.size !== 1) { return undefined; }
+    const id = [...this.selectedIds][0];
+    return this.shapes.find((s) => s.id === id);
+  }
+
+  getSelectedShapes(): Shape[] {
+    return this.shapes.filter((s) => this.selectedIds.has(s.id));
+  }
+
+  groupSelected(): void {
+    if (this.selectedIds.size < 2) { return; }
+    this.pushUndo();
+    const groupId = `g_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    for (const shape of this.shapes) {
+      if (this.selectedIds.has(shape.id)) {
+        shape.groupId = groupId;
+      }
+    }
+    this.onChange();
+    this.render();
+  }
+
+  ungroupSelected(): void {
+    if (this.selectedIds.size === 0) { return; }
+    this.pushUndo();
+    for (const shape of this.shapes) {
+      if (this.selectedIds.has(shape.id)) {
+        shape.groupId = undefined;
+      }
+    }
+    this.onChange();
+    this.render();
   }
 
   addTableRow(): void {
@@ -513,8 +786,8 @@ export class CanvasEditor {
   }
 
   private selectShape(shape: Shape): void {
-    this.selectedId = shape.id;
-    this.onSelectionChange(shape.id);
+    this.selectedIds = new Set([shape.id]);
+    this.onSelectionChange(new Set(this.selectedIds));
     if (this.currentToolType !== "select") {
       this.switchToSelect();
     }
@@ -524,6 +797,12 @@ export class CanvasEditor {
   /** Open inline editor appropriate for the shape type */
   private openShapeEditor(shape: Shape, pt: Point): void {
     switch (shape.type) {
+      case "rect":
+      case "ellipse":
+      case "arrow":
+      case "bubble":
+        this.editShapeLabel(shape);
+        break;
       case "text":
         this.editTextShape(shape);
         break;
@@ -551,6 +830,12 @@ export class CanvasEditor {
 
     // Shape-specific edit entry
     switch (shape.type) {
+      case "rect":
+      case "ellipse":
+      case "arrow":
+      case "bubble":
+        items.push({ label: "Edit Label", action: () => this.editShapeLabel(shape as RectShape | EllipseShape | ArrowShape | BubbleShape) });
+        break;
       case "text":
         items.push({ label: "Edit Text", action: () => this.editTextShape(shape as TextShape) });
         break;

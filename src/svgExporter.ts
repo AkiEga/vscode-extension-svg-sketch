@@ -27,17 +27,60 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
         lines.push(
           `  <rect ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"/>`
         );
+        if (shape.label) {
+          const lx = shape.x + shape.width / 2;
+          const ly = shape.y + shape.height / 2;
+          const fs = shape.labelFontSize ?? 16;
+          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+        }
         break;
       case "ellipse":
         lines.push(
           `  <ellipse ${common} cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`
         );
+        if (shape.label) {
+          const fs = shape.labelFontSize ?? 16;
+          lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+        }
         break;
       case "arrow":
         lines.push(
           `  <line ${common} x1="${shape.x1}" y1="${shape.y1}" x2="${shape.x2}" y2="${shape.y2}" marker-end="url(#arrowhead)" style="color:${shape.stroke}"/>`
         );
+        if (shape.label) {
+          const lx = (shape.x1 + shape.x2) / 2;
+          const ly = (shape.y1 + shape.y2) / 2 - 10;
+          const fs = shape.labelFontSize ?? 16;
+          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+        }
         break;
+      case "bubble": {
+        const x = shape.x;
+        const y = shape.y;
+        const w = shape.width;
+        const h = shape.height;
+        const tailW = Math.min(24, w * 0.25);
+        const tailH = Math.min(18, h * 0.25);
+        const tailX = x + w * 0.35;
+        const path = [
+          `M ${x} ${y}`,
+          `H ${x + w}`,
+          `V ${y + h}`,
+          `H ${tailX + tailW}`,
+          `L ${tailX + tailW * 0.4} ${y + h + tailH}`,
+          `L ${tailX} ${y + h}`,
+          `H ${x}`,
+          "Z",
+        ].join(" ");
+        lines.push(`  <path ${common} d="${path}"/>`);
+        if (shape.label) {
+          const lx = shape.x + shape.width / 2;
+          const ly = shape.y + shape.height / 2;
+          const fs = shape.labelFontSize ?? 16;
+          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+        }
+        break;
+      }
       case "text":
         lines.push(
           `  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="sans-serif">${escapeXml(shape.text)}</text>`

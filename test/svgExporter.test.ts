@@ -60,6 +60,37 @@ describe("shapesToSvg", () => {
     expect(svg).toContain('id="arrowhead"');
   });
 
+  it("rect の label を中央テキストとして SVG に出力する", () => {
+    const rect = new RectShape({
+      id: "r1", x: 20, y: 30, width: 120, height: 60,
+      stroke: "#123456", fill: "#fff", lineWidth: 2,
+      label: "Node", labelFontSize: 18,
+    });
+    const svg = shapesToSvg([rect]);
+    expect(svg).toContain('<rect');
+    expect(svg).toContain('<text');
+    expect(svg).toContain('text-anchor="middle"');
+    expect(svg).toContain('dominant-baseline="central"');
+    expect(svg).toContain('font-size="18"');
+    expect(svg).toContain('>Node</text>');
+  });
+
+  it("ellipse/arrow の label を SVG に出力する", () => {
+    const ellipse = new EllipseShape({
+      id: "e1", cx: 100, cy: 120, rx: 40, ry: 24,
+      stroke: "#0a0", fill: "none", lineWidth: 2,
+      label: "E",
+    });
+    const arrow = new ArrowShape({
+      id: "a1", x1: 10, y1: 10, x2: 100, y2: 70,
+      stroke: "#00f", fill: "none", lineWidth: 2,
+      label: "Flow",
+    });
+    const svg = shapesToSvg([ellipse, arrow]);
+    expect(svg).toContain('>E</text>');
+    expect(svg).toContain('>Flow</text>');
+  });
+
   it("text を正しい SVG 要素に変換し、特殊文字をエスケープする", () => {
     const text = new TextShape({
       id: "t1", x: 50, y: 80, text: '<Hello> & "World"',

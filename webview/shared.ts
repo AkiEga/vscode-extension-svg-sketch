@@ -3,6 +3,7 @@ import {
   RectShape,
   EllipseShape,
   ArrowShape,
+  BubbleShape,
   TextShape,
   TableShape,
   reviveShape,
@@ -26,6 +27,7 @@ export {
   RectShape,
   EllipseShape,
   ArrowShape,
+  BubbleShape,
   TextShape,
   TableShape,
   reviveShape,
@@ -49,8 +51,13 @@ export interface DrawStyle {
   lineWidth: number;
 }
 
+/** Modifier key state passed from mouse events */
+export interface MouseOptions {
+  shiftKey?: boolean;
+}
+
 export interface Tool {
-  onMouseDown(pt: Point, style: DrawStyle): void;
+  onMouseDown(pt: Point, style: DrawStyle, options?: MouseOptions): void;
   onMouseMove(pt: Point): void;
   onMouseUp(pt: Point): Shape | undefined;
   /** Preview shape while dragging (optional) */

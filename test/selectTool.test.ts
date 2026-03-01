@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { SelectTool } from "../webview/canvas/tools/SelectTool";
-import { RectShape, EllipseShape, ArrowShape, type Shape } from "../src/types";
+import { RectShape, EllipseShape, ArrowShape, BubbleShape, type Shape } from "../src/types";
 import type { DrawStyle } from "../webview/shared";
 
 const style: DrawStyle = { stroke: "#000", fill: "#fff", lineWidth: 2 };
@@ -13,7 +13,7 @@ function makeRect(id: string, x: number, y: number, w: number, h: number): RectS
 
 describe("SelectTool", () => {
   let shapes: Shape[];
-  let selectedId: string | undefined;
+  let selectedIds: Set<string>;
   let undoPushCount: number;
   let tool: SelectTool;
 
@@ -22,16 +22,17 @@ describe("SelectTool", () => {
       makeRect("r1", 100, 100, 200, 100),
       makeRect("r2", 400, 100, 100, 100),
     ];
-    selectedId = undefined;
+    selectedIds = new Set();
     undoPushCount = 0;
-    tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
   });
 
   it("図形上のクリックで選択される", () => {
     tool.onMouseDown({ x: 150, y: 150 }, style);
     tool.onMouseUp({ x: 150, y: 150 });
 
-    expect(selectedId).toBe("r1");
+    expect(selectedIds.has("r1")).toBe(true);
+    expect(selectedIds.size).toBe(1);
     expect(tool.selectedShapeId).toBe("r1");
   });
 
@@ -39,23 +40,24 @@ describe("SelectTool", () => {
     // まず選択
     tool.onMouseDown({ x: 150, y: 150 }, style);
     tool.onMouseUp({ x: 150, y: 150 });
-    expect(selectedId).toBe("r1");
+    expect(selectedIds.has("r1")).toBe(true);
 
     // 空白クリック
     tool.onMouseDown({ x: 50, y: 50 }, style);
     tool.onMouseUp({ x: 50, y: 50 });
-    expect(selectedId).toBeUndefined();
+    expect(selectedIds.size).toBe(0);
     expect(tool.selectedShapeId).toBeUndefined();
   });
 
   it("最前面 (後に追加された) の図形が優先して選択される", () => {
     // r1 と重なる位置に r3 を追加
     shapes.push(makeRect("r3", 150, 120, 100, 60));
-    tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
 
     tool.onMouseDown({ x: 180, y: 140 }, style);
     tool.onMouseUp({ x: 180, y: 140 });
-    expect(selectedId).toBe("r3");
+    expect(selectedIds.has("r3")).toBe(true);
+    expect(selectedIds.size).toBe(1);
   });
 
   it("ドラッグで rect を移動できる", () => {
@@ -77,7 +79,7 @@ describe("SelectTool", () => {
       stroke: "#000", fill: "#fff", lineWidth: 2,
     });
     shapes.push(ellipse);
-    tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
 
     tool.onMouseDown({ x: 300, y: 300 }, style);
     tool.onMouseMove({ x: 350, y: 320 });
@@ -95,7 +97,7 @@ describe("SelectTool", () => {
       stroke: "#000", fill: "none", lineWidth: 2,
     });
     shapes.push(arrow);
-    tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
 
     // 矢印の中間点付近をクリック
     tool.onMouseDown({ x: 150, y: 150 }, style);
@@ -122,7 +124,7 @@ describe("SelectTool", () => {
 
   it("選択なし状態で mouseMove しても例外が発生しない", () => {
     tool.onMouseMove({ x: 200, y: 200 });
-    expect(selectedId).toBeUndefined();
+    expect(selectedIds.size).toBe(0);
   });
 });
 
@@ -130,18 +132,19 @@ describe("SelectTool", () => {
 
 describe("SelectTool – handle resize", () => {
   let shapes: Shape[];
-  let selectedId: string | undefined;
+  let selectedIds: Set<string>;
   let undoPushCount: number;
   let tool: SelectTool;
 
   beforeEach(() => {
     undoPushCount = 0;
+    selectedIds = new Set();
   });
 
   it("rect の BR ハンドルドラッグでサイズ変更できる", () => {
     const rect = makeRect("r1", 100, 100, 200, 100);
     shapes = [rect];
-    tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
 
     // まず選択する
     tool.onMouseDown({ x: 150, y: 150 }, style);
@@ -162,7 +165,7 @@ describe("SelectTool – handle resize", () => {
   it("rect の TL ハンドルドラッグでサイズと位置が変更される", () => {
     const rect = makeRect("r1", 100, 100, 200, 100);
     shapes = [rect];
-    tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
 
     tool.onMouseDown({ x: 150, y: 150 }, style);
     tool.onMouseUp({ x: 150, y: 150 });
@@ -184,7 +187,7 @@ describe("SelectTool – handle resize", () => {
       stroke: "#000", fill: "#fff", lineWidth: 2,
     });
     shapes = [ellipse];
-    tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
 
     tool.onMouseDown({ x: 200, y: 200 }, style);
     tool.onMouseUp({ x: 200, y: 200 });
@@ -205,7 +208,7 @@ describe("SelectTool – handle resize", () => {
       stroke: "#000", fill: "none", lineWidth: 2,
     });
     shapes = [arrow];
-    tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
 
     // 矢印の中間点付近をクリックして選択
     tool.onMouseDown({ x: 200, y: 150 }, style);
@@ -228,7 +231,7 @@ describe("SelectTool – handle resize", () => {
       stroke: "#000", fill: "none", lineWidth: 2,
     });
     shapes = [arrow];
-    tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
 
     tool.onMouseDown({ x: 200, y: 150 }, style);
     tool.onMouseUp({ x: 200, y: 150 });
@@ -244,10 +247,35 @@ describe("SelectTool – handle resize", () => {
     expect(arrow.y2).toBe(250);
   });
 
+  it("bubble のハンドルドラッグで消失せずサイズ変更できる", () => {
+    const bubble = new BubbleShape({
+      id: "b1", x: 120, y: 120, width: 120, height: 80,
+      stroke: "#000", fill: "#fff", lineWidth: 2,
+    });
+    shapes = [bubble];
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
+
+    // select bubble
+    tool.onMouseDown({ x: 160, y: 150 }, style);
+    tool.onMouseUp({ x: 160, y: 150 });
+
+    // BR handle ~= (x+width+4, y+height+16+4)
+    tool.onMouseDown({ x: 244, y: 220 }, style);
+    tool.onMouseMove({ x: 274, y: 250 });
+    tool.onMouseUp({ x: 274, y: 250 });
+
+    expect(Number.isFinite(bubble.x)).toBe(true);
+    expect(Number.isFinite(bubble.y)).toBe(true);
+    expect(Number.isFinite(bubble.width)).toBe(true);
+    expect(Number.isFinite(bubble.height)).toBe(true);
+    expect(bubble.width).toBeGreaterThan(0);
+    expect(bubble.height).toBeGreaterThan(0);
+  });
+
   it("ドラッグ中に onUndoPush が1回だけ呼ばれる", () => {
     const rect = makeRect("r1", 100, 100, 200, 100);
     shapes = [rect];
-    tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
 
     tool.onMouseDown({ x: 150, y: 150 }, style);
     tool.onMouseMove({ x: 160, y: 160 });
@@ -261,7 +289,7 @@ describe("SelectTool – handle resize", () => {
   it("getCursorAt がハンドル上で正しいカーソルを返す", () => {
     const rect = makeRect("r1", 100, 100, 200, 100);
     shapes = [rect];
-    tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
 
     // 選択
     tool.onMouseDown({ x: 150, y: 150 }, style);

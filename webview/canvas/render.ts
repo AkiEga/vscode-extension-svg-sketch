@@ -1,15 +1,21 @@
-import { Shape, ArrowShape, TableShape } from "../shared";
+import { Shape, ArrowShape, TableShape, BubbleShape } from "../shared";
 import type { Point } from "../shared";
 import { getShapeHandles } from "./tools/SelectTool";
+import type { RubberBand } from "./tools/SelectTool";
 
 const HANDLE_SIZE = 6;
+
+function hasVisibleStroke(shape: Shape): boolean {
+  return shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent";
+}
 
 /** Render all shapes onto a canvas 2D context */
 export function renderShapes(
   ctx: CanvasRenderingContext2D,
   shapes: Shape[],
   preview: Shape | undefined,
-  selectedId: string | undefined,
+  selectedIds: Set<string>,
+  rubberBand?: RubberBand,
 ): void {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
@@ -19,7 +25,7 @@ export function renderShapes(
   // Draw all shapes
   for (const shape of shapes) {
     drawShape(ctx, shape);
-    if (shape.id === selectedId) {
+    if (selectedIds.has(shape.id)) {
       drawSelectionIndicator(ctx, shape);
     }
   }
@@ -29,6 +35,11 @@ export function renderShapes(
     ctx.globalAlpha = 0.5;
     drawShape(ctx, preview);
     ctx.globalAlpha = 1.0;
+  }
+
+  // Draw rubber-band selection marquee
+  if (rubberBand) {
+    drawRubberBand(ctx, rubberBand);
   }
 }
 
@@ -52,16 +63,22 @@ function drawGrid(ctx: CanvasRenderingContext2D): void {
 }
 
 function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
-  ctx.strokeStyle = shape.stroke;
+  const drawStroke = hasVisibleStroke(shape);
+  if (drawStroke) {
+    ctx.strokeStyle = shape.stroke;
+  }
   ctx.fillStyle = shape.fill;
-  ctx.lineWidth = shape.lineWidth;
+  ctx.lineWidth = drawStroke ? shape.lineWidth : 0;
 
   switch (shape.type) {
     case "rect":
       if (shape.fill !== "none" && shape.fill !== "transparent") {
         ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
       }
-      ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+      if (drawStroke) {
+        ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+      }
+      drawShapeLabel(ctx, shape, shape.x + shape.width / 2, shape.y + shape.height / 2);
       break;
 
     case "ellipse":
@@ -70,11 +87,20 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
       if (shape.fill !== "none" && shape.fill !== "transparent") {
         ctx.fill();
       }
-      ctx.stroke();
+      if (drawStroke) {
+        ctx.stroke();
+      }
+      drawShapeLabel(ctx, shape, shape.cx, shape.cy);
       break;
 
     case "arrow":
       drawArrow(ctx, shape.x1, shape.y1, shape.x2, shape.y2);
+      drawShapeLabel(ctx, shape, (shape.x1 + shape.x2) / 2, (shape.y1 + shape.y2) / 2 - 10);
+      break;
+
+    case "bubble":
+      drawBubble(ctx, shape);
+      drawShapeLabel(ctx, shape, shape.x + shape.width / 2, shape.y + shape.height / 2);
       break;
 
     case "text":
@@ -87,6 +113,53 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
       drawTable(ctx, shape);
       break;
   }
+}
+
+function drawBubble(ctx: CanvasRenderingContext2D, shape: BubbleShape): void {
+  const drawStroke = hasVisibleStroke(shape);
+  const radius = 10;
+  const x = shape.x;
+  const y = shape.y;
+  const w = shape.width;
+  const h = shape.height;
+
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + w * 0.6, y + h);
+  ctx.lineTo(x + w * 0.5, y + h + 16);
+  ctx.lineTo(x + w * 0.45, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+
+  if (shape.fill !== "none" && shape.fill !== "transparent") {
+    ctx.fill();
+  }
+  if (drawStroke) {
+    ctx.stroke();
+  }
+}
+
+function drawShapeLabel(
+  ctx: CanvasRenderingContext2D,
+  shape: Shape & { label?: string; labelFontSize?: number; stroke: string },
+  x: number,
+  y: number,
+): void {
+  if (!shape.label) { return; }
+  ctx.save();
+  ctx.font = `${shape.labelFontSize ?? 16}px sans-serif`;
+  ctx.fillStyle = shape.stroke;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(shape.label, x, y);
+  ctx.restore();
 }
 
 function drawArrow(
@@ -205,5 +278,16 @@ function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Shape): vo
     }
   }
 
+  ctx.restore();
+}
+
+function drawRubberBand(ctx: CanvasRenderingContext2D, rb: RubberBand): void {
+  ctx.save();
+  ctx.fillStyle = "rgba(74, 144, 217, 0.1)";
+  ctx.fillRect(rb.x, rb.y, rb.width, rb.height);
+  ctx.strokeStyle = "#4a90d9";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 3]);
+  ctx.strokeRect(rb.x, rb.y, rb.width, rb.height);
   ctx.restore();
 }

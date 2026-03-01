@@ -216,3 +216,21 @@ export async function deleteTemplate(templateId: string): Promise<boolean> {
     return false;
   }
 }
+
+function sanitizeFileName(name: string): string {
+  const normalized = name.trim().replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ");
+  return normalized || "template";
+}
+
+/** Save raw SVG content as a template asset file. */
+export async function saveTemplateSvg(name: string, svgContent: string): Promise<string | undefined> {
+  const dir = await ensureTemplateDirectoryExists();
+  if (!dir) {
+    return undefined;
+  }
+  const safe = sanitizeFileName(name);
+  const filename = `${safe}.svg`;
+  const fileUri = vscode.Uri.joinPath(dir, filename);
+  await vscode.workspace.fs.writeFile(fileUri, Buffer.from(svgContent, "utf-8"));
+  return fileUri.fsPath;
+}

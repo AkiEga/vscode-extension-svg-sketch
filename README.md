@@ -7,10 +7,13 @@ SVG Sketch is a VS Code extension that lets you create and edit SVG diagrams wit
 ## Features
 
 - Canvas-based custom editor for `.svg` files
-- 6 drawing tools: Select, Rectangle, Ellipse, Arrow, Text, Table
+- 5 drawing tools: Select, Rectangle, Ellipse, Arrow, Table
+- Insert/edit labels for selected shapes (`F2`)
 - Save/overwrite SVG directly from the editor
 - Re-edit existing SVG files (diagram data is embedded in `data-diagram`)
 - Undo/Redo and keyboard shortcuts
+- Copy/paste selected shapes (`Ctrl+C` / `Ctrl+V`)
+- Grid snap toggle (`S`)
 - Diagram template save/insert/delete workflow
 
 ## Usage
@@ -35,8 +38,11 @@ SVG Sketch is a VS Code extension that lets you create and edit SVG diagrams wit
 | `R` | Rectangle tool |
 | `E` | Ellipse tool |
 | `A` | Arrow tool |
-| `T` | Text tool |
 | `G` | Table tool |
+| `F2` | Edit label/text for selected shape |
+| `S` | Toggle grid snap |
+| `Ctrl+C` | Copy selected shapes |
+| `Ctrl+V` | Paste shapes |
 | `Delete` / `Backspace` | Delete selected shape |
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y` | Redo |

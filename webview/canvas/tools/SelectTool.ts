@@ -1,8 +1,10 @@
-import type { Point, DrawStyle, Tool } from "../../shared";
-import { Shape, RectShape, EllipseShape, ArrowShape, TextShape, TableShape } from "../../shared";
+import type { Point, DrawStyle, Tool, MouseOptions } from "../../shared";
+import { Shape, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape } from "../../shared";
 import { hitTest } from "../../shared";
+import type { Bounds } from "../../shared";
 
 const HANDLE_TOLERANCE = 8;
+const BODY_DRAG_THRESHOLD = 6;
 
 /** Handle positions for a shape's bounding box: TL, TR, BL, BR */
 export type HandleId = "tl" | "tr" | "bl" | "br";
@@ -17,6 +19,14 @@ export interface ShapeHandles {
   tr: Point;
   bl: Point;
   br: Point;
+}
+
+/** Rubber-band rectangle for marquee selection */
+export interface RubberBand {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 /** Compute the 4-corner handle positions for a shape's bounding box */
@@ -38,21 +48,58 @@ function nearPoint(a: Point, b: Point, tol: number): boolean {
   return Math.abs(a.x - b.x) <= tol && Math.abs(a.y - b.y) <= tol;
 }
 
+/** Move a shape by delta, mutating in place */
+function moveShapeBy(shape: Shape, dx: number, dy: number): void {
+  if (shape instanceof ArrowShape) {
+    shape.x1 += dx; shape.y1 += dy;
+    shape.x2 += dx; shape.y2 += dy;
+  } else if (shape instanceof EllipseShape) {
+    shape.cx += dx; shape.cy += dy;
+  } else if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TextShape || shape instanceof TableShape) {
+    shape.x += dx; shape.y += dy;
+  }
+}
+
+/** Check if two axis-aligned bounding boxes intersect */
+function boundsIntersect(a: Bounds, b: Bounds): boolean {
+  return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+}
+
+/** Normalize two points into an axis-aligned bounding box */
+function rectFromPoints(a: Point, b: Point): Bounds {
+  return {
+    minX: Math.min(a.x, b.x),
+    minY: Math.min(a.y, b.y),
+    maxX: Math.max(a.x, b.x),
+    maxY: Math.max(a.y, b.y),
+  };
+}
+
 export class SelectTool implements Tool {
   private shapes: Shape[];
-  private selectedId: string | undefined;
-  private dragOffset: Point | undefined;
+  private _selectedIds: Set<string> = new Set();
+  private lastDragPt: Point | undefined;
+  private isDraggingBody = false;
   private activeHandle: DragHandleId | undefined;
   /** Snapshot of shape geometry at drag start for proportional resize */
   private dragOrigin: Record<string, number> | undefined;
   private dragStartPt: Point | undefined;
   private undoPushed = false;
-  private onSelect: (id: string | undefined) => void;
+  private bodyDragStartPt: Point | undefined;
+  private bodyDragMoved = false;
+  private pendingSingleSelectId: string | undefined;
+  private clickHitShapeId: string | undefined;
+  private lastMouseDownShift = false;
+  private onSelect: (ids: Set<string>) => void;
   private onUndoPush: () => void;
+
+  // Rubber-band marquee selection
+  private rubberBandStart: Point | undefined;
+  private rubberBandCurrent: Point | undefined;
 
   constructor(
     shapes: Shape[],
-    onSelect: (id: string | undefined) => void,
+    onSelect: (ids: Set<string>) => void,
     onUndoPush: () => void = () => {},
   ) {
     this.shapes = shapes;
@@ -60,14 +107,29 @@ export class SelectTool implements Tool {
     this.onUndoPush = onUndoPush;
   }
 
+  /** @deprecated Use selectedShapeIds for multi-select */
   get selectedShapeId(): string | undefined {
-    return this.selectedId;
+    if (this._selectedIds.size === 1) { return [...this._selectedIds][0]; }
+    return undefined;
   }
 
-  /** Return the handle id if pt is over a handle of the currently-selected shape */
+  get selectedShapeIds(): Set<string> {
+    return new Set(this._selectedIds);
+  }
+
+  /** Get the rubber-band rectangle if currently dragging a marquee */
+  getRubberband(): RubberBand | undefined {
+    if (!this.rubberBandStart || !this.rubberBandCurrent) { return undefined; }
+    const r = rectFromPoints(this.rubberBandStart, this.rubberBandCurrent);
+    return { x: r.minX, y: r.minY, width: r.maxX - r.minX, height: r.maxY - r.minY };
+  }
+
+  /** Return the handle id if pt is over a handle of the singly-selected shape */
   private hitHandle(pt: Point): DragHandleId | undefined {
-    if (!this.selectedId) { return undefined; }
-    const shape = this.shapes.find((s) => s.id === this.selectedId);
+    // Handle resize only works with exactly 1 selected shape
+    if (this._selectedIds.size !== 1) { return undefined; }
+    const id = [...this._selectedIds][0];
+    const shape = this.shapes.find((s) => s.id === id);
     if (!shape) { return undefined; }
 
     // Arrow: check start/end endpoints directly
@@ -85,15 +147,25 @@ export class SelectTool implements Tool {
     return undefined;
   }
 
-  onMouseDown(pt: Point, _style: DrawStyle): void {
+  onMouseDown(pt: Point, _style: DrawStyle, options?: MouseOptions): void {
     this.undoPushed = false;
+    this.rubberBandStart = undefined;
+    this.rubberBandCurrent = undefined;
+    this.isDraggingBody = false;
+    this.bodyDragStartPt = undefined;
+    this.bodyDragMoved = false;
+    this.pendingSingleSelectId = undefined;
+    this.clickHitShapeId = undefined;
+    const shiftKey = options?.shiftKey ?? false;
+    this.lastMouseDownShift = shiftKey;
 
-    // First check if clicking on a handle of the already-selected shape
+    // First check if clicking on a handle of the singly-selected shape
     const handle = this.hitHandle(pt);
     if (handle) {
       this.activeHandle = handle;
       this.dragStartPt = { ...pt };
-      const shape = this.shapes.find((s) => s.id === this.selectedId)!;
+      const id = [...this._selectedIds][0];
+      const shape = this.shapes.find((s) => s.id === id)!;
       this.dragOrigin = this.snapshotGeometry(shape);
       return;
     }
@@ -112,65 +184,132 @@ export class SelectTool implements Tool {
     }
 
     if (found) {
-      this.selectedId = found.id;
-      this.onSelect(found.id);
-      // Calculate offset for dragging
-      const origin = found.getOrigin();
-      this.dragOffset = { x: pt.x - origin.x, y: pt.y - origin.y };
+      const groupedIds = found.groupId
+        ? new Set(this.shapes.filter((s) => s.groupId === found.groupId).map((s) => s.id))
+        : new Set<string>([found.id]);
+      this.clickHitShapeId = found.id;
+      if (shiftKey) {
+        // Toggle this shape/group in/out of selection
+        const allSelected = [...groupedIds].every((id) => this._selectedIds.has(id));
+        if (allSelected) {
+          for (const id of groupedIds) {
+            this._selectedIds.delete(id);
+          }
+        } else {
+          for (const id of groupedIds) {
+            this._selectedIds.add(id);
+          }
+        }
+        this.onSelect(new Set(this._selectedIds));
+      } else {
+        if (this._selectedIds.size > 1 && this._selectedIds.has(found.id)) {
+          // Keep current multi-selection during drag, but collapse to single on click release.
+          this.pendingSingleSelectId = found.id;
+        } else {
+          this._selectedIds.clear();
+          for (const id of groupedIds) {
+            this._selectedIds.add(id);
+          }
+          this.onSelect(new Set(this._selectedIds));
+        }
+      }
+      // Setup for body drag
+      this.lastDragPt = { ...pt };
+      this.bodyDragStartPt = { ...pt };
+      this.isDraggingBody = true;
     } else {
-      this.selectedId = undefined;
-      this.dragOffset = undefined;
-      this.onSelect(undefined);
+      if (!shiftKey) {
+        this._selectedIds.clear();
+        this.onSelect(new Set(this._selectedIds));
+      }
+      this.lastDragPt = undefined;
+      // Start rubber-band selection
+      this.rubberBandStart = { ...pt };
+      this.rubberBandCurrent = { ...pt };
     }
   }
 
   onMouseMove(pt: Point): void {
-    if (!this.selectedId) { return; }
-    const shape = this.shapes.find((s) => s.id === this.selectedId);
-    if (!shape) { return; }
+    // Rubber-band mode
+    if (this.rubberBandStart) {
+      this.rubberBandCurrent = { ...pt };
+      return;
+    }
 
-    // Handle resize
+    if (this._selectedIds.size === 0) { return; }
+
+    // Handle resize (single shape only)
     if (this.activeHandle && this.dragOrigin && this.dragStartPt) {
       if (!this.undoPushed) {
         this.undoPushed = true;
         this.onUndoPush();
       }
-      this.applyHandleDrag(shape, pt);
+      const id = [...this._selectedIds][0];
+      const shape = this.shapes.find((s) => s.id === id);
+      if (shape) { this.applyHandleDrag(shape, pt); }
       return;
     }
 
-    // Body move
-    if (!this.dragOffset) { return; }
+    // Body move: move all selected shapes
+    if (!this.isDraggingBody || !this.lastDragPt) { return; }
+    if (!this.bodyDragMoved && this.bodyDragStartPt) {
+      const dist = Math.hypot(pt.x - this.bodyDragStartPt.x, pt.y - this.bodyDragStartPt.y);
+      if (dist < BODY_DRAG_THRESHOLD) {
+        return;
+      }
+      this.bodyDragMoved = true;
+      this.pendingSingleSelectId = undefined;
+    }
     if (!this.undoPushed) {
       this.undoPushed = true;
       this.onUndoPush();
     }
 
-    const nx = pt.x - this.dragOffset.x;
-    const ny = pt.y - this.dragOffset.y;
+    const dx = pt.x - this.lastDragPt.x;
+    const dy = pt.y - this.lastDragPt.y;
 
-    if (shape instanceof ArrowShape) {
-      const dx = nx - shape.x1;
-      const dy = ny - shape.y1;
-      shape.x1 += dx;
-      shape.y1 += dy;
-      shape.x2 += dx;
-      shape.y2 += dy;
-      this.dragOffset = { x: pt.x - shape.x1, y: pt.y - shape.y1 };
-    } else if (shape instanceof EllipseShape) {
-      shape.cx = nx;
-      shape.cy = ny;
-    } else if (shape instanceof RectShape || shape instanceof TextShape || shape instanceof TableShape) {
-      shape.x = nx;
-      shape.y = ny;
+    for (const id of this._selectedIds) {
+      const shape = this.shapes.find((s) => s.id === id);
+      if (shape) { moveShapeBy(shape, dx, dy); }
     }
+    this.lastDragPt = { ...pt };
   }
 
-  onMouseUp(_pt: Point): Shape | undefined {
-    this.dragOffset = undefined;
+  onMouseUp(pt: Point): Shape | undefined {
+    // Rubber-band: select shapes whose bounds intersect
+    if (this.rubberBandStart) {
+      const rect = rectFromPoints(this.rubberBandStart, pt);
+      const hasArea = (rect.maxX - rect.minX) > 2 || (rect.maxY - rect.minY) > 2;
+      if (hasArea) {
+        for (const s of this.shapes) {
+          if (boundsIntersect(s.getBounds(), rect)) {
+            this._selectedIds.add(s.id);
+          }
+        }
+        this.onSelect(new Set(this._selectedIds));
+      }
+      this.rubberBandStart = undefined;
+      this.rubberBandCurrent = undefined;
+      return undefined;
+    }
+
+    if (!this.bodyDragMoved && !this.lastMouseDownShift && this.clickHitShapeId) {
+      const singleId = this.pendingSingleSelectId ?? this.clickHitShapeId;
+      this._selectedIds.clear();
+      this._selectedIds.add(singleId);
+      this.onSelect(new Set(this._selectedIds));
+    }
+
+    this.lastDragPt = undefined;
+    this.isDraggingBody = false;
     this.activeHandle = undefined;
     this.dragOrigin = undefined;
     this.dragStartPt = undefined;
+    this.bodyDragStartPt = undefined;
+    this.bodyDragMoved = false;
+    this.pendingSingleSelectId = undefined;
+    this.clickHitShapeId = undefined;
+    this.lastMouseDownShift = false;
     return undefined; // select tool doesn't create shapes
   }
 
@@ -204,6 +343,9 @@ export class SelectTool implements Tool {
     if (shape instanceof TableShape) {
       return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
     }
+    if (shape instanceof BubbleShape) {
+      return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+    }
     return {};
   }
 
@@ -217,7 +359,7 @@ export class SelectTool implements Tool {
       return;
     }
 
-    if (shape.type === "rect" || shape.type === "table") {
+    if (shape.type === "rect" || shape.type === "bubble" || shape.type === "table") {
       let newX = o.x, newY = o.y, newW = o.width, newH = o.height;
       switch (handle) {
         case "tl":

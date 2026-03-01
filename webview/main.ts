@@ -1,5 +1,5 @@
 import { CanvasEditor } from "./canvas/CanvasEditor";
-import { reviveShapes, RectShape, EllipseShape, ArrowShape, TextShape, TableShape } from "./shared";
+import { reviveShapes, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape } from "./shared";
 import type {
   ToolType,
   DiagramData,
@@ -53,13 +53,13 @@ editor.setOnChange(() => saveState(editor.getShapes()));
 
 // --- Table editing toolbar ---
 const tableToolbar = document.getElementById("table-toolbar") as HTMLElement;
-editor.setOnSelectionChange((id) => {
-  if (!id) {
-    tableToolbar.style.display = "none";
+editor.setOnSelectionChange((ids) => {
+  if (ids.size === 0) {
+    tableToolbar.style.visibility = "hidden";
     return;
   }
   const shape = editor.getSelectedShape();
-  tableToolbar.style.display = shape?.type === "table" ? "flex" : "none";
+  tableToolbar.style.visibility = shape?.type === "table" ? "visible" : "hidden";
 });
 
 document.getElementById("btn-add-row")!.addEventListener("click", () => editor.addTableRow());
@@ -86,8 +86,15 @@ toolButtons.forEach((btn) => {
 // Keyboard shortcuts for tools
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement) { return; }
+  // Snap toggle: S key
+  if (e.key.toLowerCase() === "s" && !e.ctrlKey && !e.metaKey) {
+    const snapBtn = document.getElementById("btn-snap") as HTMLButtonElement | null;
+    const on = editor.toggleSnap();
+    if (snapBtn) { snapBtn.classList.toggle("active", on); }
+    return;
+  }
   const keyMap: Record<string, ToolType> = {
-    v: "select", r: "rect", e: "ellipse", a: "arrow", t: "text", g: "table",
+    v: "select", r: "rect", e: "ellipse", a: "arrow", t: "text", b: "bubble", g: "table",
   };
   const tool = keyMap[e.key.toLowerCase()];
   if (tool) {
@@ -101,15 +108,55 @@ window.addEventListener("keydown", (e) => {
 const strokeInput = document.getElementById("stroke-color") as HTMLInputElement;
 const fillInput = document.getElementById("fill-color") as HTMLInputElement;
 const lineWidthInput = document.getElementById("line-width") as HTMLInputElement;
+const borderlessInput = document.getElementById("borderless") as HTMLInputElement;
+let lineWidthBeforeBorderless = Math.max(1, parseInt(lineWidthInput.value, 10) || 2);
 
-strokeInput.addEventListener("input", () => editor.setStyle({ stroke: strokeInput.value }));
+const applyStrokeStyle = (): void => {
+  editor.setStyle({ stroke: strokeInput.value });
+};
+
+strokeInput.addEventListener("input", () => applyStrokeStyle());
 fillInput.addEventListener("input", () => editor.setStyle({ fill: fillInput.value }));
-lineWidthInput.addEventListener("input", () => editor.setStyle({ lineWidth: parseInt(lineWidthInput.value, 10) }));
+lineWidthInput.addEventListener("input", () => {
+  const next = Math.max(0, parseInt(lineWidthInput.value, 10) || 0);
+  if (!borderlessInput.checked && next > 0) {
+    lineWidthBeforeBorderless = next;
+  }
+  editor.setStyle({ lineWidth: next });
+});
+borderlessInput.addEventListener("change", () => {
+  if (borderlessInput.checked) {
+    const current = Math.max(0, parseInt(lineWidthInput.value, 10) || 0);
+    if (current > 0) {
+      lineWidthBeforeBorderless = current;
+    }
+    lineWidthInput.value = "0";
+    lineWidthInput.disabled = true;
+    editor.setStyle({ lineWidth: 0 });
+    return;
+  }
+
+  const restore = Math.max(1, lineWidthBeforeBorderless || 2);
+  lineWidthInput.value = String(restore);
+  lineWidthInput.disabled = false;
+  editor.setStyle({ lineWidth: restore, stroke: strokeInput.value });
+});
 
 // Action buttons
 document.getElementById("btn-undo")!.addEventListener("click", () => editor.undo());
 document.getElementById("btn-redo")!.addEventListener("click", () => editor.redo());
 document.getElementById("btn-delete")!.addEventListener("click", () => editor.deleteSelected());
+document.getElementById("btn-edit-label")!.addEventListener("click", () => editor.editSelectedShapeLabel());
+document.getElementById("btn-group")!.addEventListener("click", () => editor.groupSelected());
+document.getElementById("btn-ungroup")!.addEventListener("click", () => editor.ungroupSelected());
+
+// Snap toggle
+const btnSnap = document.getElementById("btn-snap") as HTMLButtonElement | null;
+btnSnap?.classList.toggle("active", editor.snapToGrid);
+btnSnap?.addEventListener("click", () => {
+  const on = editor.toggleSnap();
+  btnSnap.classList.toggle("active", on);
+});
 
 document.getElementById("btn-save")!.addEventListener("click", () => {
   const shapes = editor.getShapes();
@@ -122,6 +169,7 @@ const templateNameInput = document.getElementById("template-name") as HTMLInputE
 const templatePanel = document.getElementById("template-panel") as HTMLElement;
 const templateList = document.getElementById("template-list") as HTMLElement;
 const btnSaveTemplate = document.getElementById("btn-save-template") as HTMLButtonElement;
+const btnSaveTemplateSvg = document.getElementById("btn-save-template-svg") as HTMLButtonElement;
 const btnToggleTemplates = document.getElementById("btn-toggle-templates") as HTMLButtonElement;
 
 let templates: DiagramTemplateSummary[] = [];
@@ -133,6 +181,17 @@ btnSaveTemplate.addEventListener("click", () => {
     return;
   }
   postMessage({ command: "saveTemplate", name, shapes: JSON.parse(JSON.stringify(shapes)) as ShapeJSON[] });
+});
+
+btnSaveTemplateSvg.addEventListener("click", () => {
+  const name = templateNameInput.value.trim();
+  const shapes = editor.getShapes();
+  if (!name || shapes.length === 0) {
+    return;
+  }
+  const { width, height } = editor.getCanvasSize();
+  const svgContent = shapesToSvgString(shapes, width, height);
+  postMessage({ command: "saveTemplateSvg", name, svgContent });
 });
 
 btnToggleTemplates.addEventListener("click", () => {
@@ -249,10 +308,55 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
     const common = `data-shape-id="${shape.id}" stroke="${shape.stroke}" fill="${shape.fill}" stroke-width="${shape.lineWidth}"`;
     if (shape instanceof RectShape) {
       lines.push(`  <rect ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"/>`);
+      if (shape.label) {
+        const lx = shape.x + shape.width / 2;
+        const ly = shape.y + shape.height / 2;
+        const fs = shape.labelFontSize ?? 16;
+        const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+      }
     } else if (shape instanceof EllipseShape) {
       lines.push(`  <ellipse ${common} cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`);
+      if (shape.label) {
+        const fs = shape.labelFontSize ?? 16;
+        const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+      }
     } else if (shape instanceof ArrowShape) {
       lines.push(`  <line ${common} x1="${shape.x1}" y1="${shape.y1}" x2="${shape.x2}" y2="${shape.y2}" marker-end="url(#arrowhead)" style="color:${shape.stroke}"/>`);
+      if (shape.label) {
+        const lx = (shape.x1 + shape.x2) / 2;
+        const ly = (shape.y1 + shape.y2) / 2 - 10;
+        const fs = shape.labelFontSize ?? 16;
+        const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+      }
+    } else if (shape instanceof BubbleShape) {
+      const x = shape.x;
+      const y = shape.y;
+      const w = shape.width;
+      const h = shape.height;
+      const tailW = Math.min(24, w * 0.25);
+      const tailH = Math.min(18, h * 0.25);
+      const tailX = x + w * 0.35;
+      const path = [
+        `M ${x} ${y}`,
+        `H ${x + w}`,
+        `V ${y + h}`,
+        `H ${tailX + tailW}`,
+        `L ${tailX + tailW * 0.4} ${y + h + tailH}`,
+        `L ${tailX} ${y + h}`,
+        `H ${x}`,
+        "Z",
+      ].join(" ");
+      lines.push(`  <path ${common} d="${path}"/>`);
+      if (shape.label) {
+        const lx = shape.x + shape.width / 2;
+        const ly = shape.y + shape.height / 2;
+        const fs = shape.labelFontSize ?? 16;
+        const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+      }
     } else if (shape instanceof TextShape) {
       const escaped = shape.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       lines.push(`  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="sans-serif">${escaped}</text>`);

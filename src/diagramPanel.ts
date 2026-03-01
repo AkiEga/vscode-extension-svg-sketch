@@ -3,6 +3,7 @@ import type { WebviewToExtMessage, ExtToWebviewMessage } from "./types";
 import {
   listTemplates,
   saveTemplate,
+  saveTemplateSvg,
   loadTemplate,
   deleteTemplate,
 } from "./fileUtils";
@@ -101,6 +102,19 @@ export class DiagramPanel {
         await this.postTemplatesList();
         break;
       }
+      case "saveTemplateSvg": {
+        if (!msg.name.trim() || !msg.svgContent.trim()) {
+          this.postMessage({ command: "error", message: "Template name and SVG content are required." });
+          return;
+        }
+        const path = await saveTemplateSvg(msg.name, msg.svgContent);
+        if (!path) {
+          this.postMessage({ command: "error", message: "Failed to save SVG template." });
+          return;
+        }
+        void vscode.window.showInformationMessage(`Template SVG saved: ${path}`);
+        break;
+      }
       case "applyTemplate": {
         const template = await loadTemplate(msg.templateId);
         if (!template) {
@@ -158,6 +172,7 @@ export class DiagramPanel {
       border-bottom: 1px solid var(--vscode-panel-border);
       flex-wrap: wrap; align-items: center;
     }
+    #toolbar .row-break { flex-basis: 100%; height: 0; }
     #toolbar button {
       padding: 4px 10px; cursor: pointer;
       background: var(--vscode-button-secondaryBackground);
@@ -175,6 +190,8 @@ export class DiagramPanel {
     #toolbar label { font-size: 11px; margin-left: 4px; }
     #toolbar input[type="color"] { width: 28px; height: 22px; border: none; cursor: pointer; }
     #toolbar input[type="number"] { width: 40px; padding: 2px 4px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); }
+    #toolbar .check-inline { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
+    #toolbar .check-inline input[type="checkbox"] { margin: 0; }
 
     #canvas-container { flex: 1; overflow: hidden; position: relative; }
     #canvas { display: block; background: #ffffff; cursor: crosshair; }
@@ -226,10 +243,12 @@ export class DiagramPanel {
       border: 1px solid var(--vscode-input-border);
     }
     #table-toolbar {
-      display: none; gap: 4px; padding: 4px 8px;
+      display: flex; gap: 4px; padding: 4px 8px;
       background: var(--vscode-sideBar-background);
       border-bottom: 1px solid var(--vscode-panel-border);
       align-items: center; font-size: 12px;
+      min-height: 32px;
+      visibility: hidden;
     }
     #table-toolbar span { opacity: 0.8; }
     #table-toolbar button {
@@ -266,23 +285,31 @@ export class DiagramPanel {
 </head>
 <body>
   <div id="toolbar">
-    <button data-tool="select" title="Select (V)">⇱ Select</button>
-    <button data-tool="rect" class="active" title="Rectangle (R)">▭ Rect</button>
+    <button data-tool="select" class="active" title="Select (V)">⇱ Select</button>
+    <button data-tool="rect" title="Rectangle (R)">▭ Rect</button>
     <button data-tool="ellipse" title="Ellipse (E)">◯ Ellipse</button>
     <button data-tool="arrow" title="Arrow (A)">→ Arrow</button>
     <button data-tool="text" title="Text (T)">T Text</button>
+    <button data-tool="bubble" title="Speech Bubble (B)">💬 Bubble</button>
     <button data-tool="table" title="Table (G)">⊞ Table</button>
     <div class="separator"></div>
     <label>Stroke</label><input type="color" id="stroke-color" value="#000000">
     <label>Fill</label><input type="color" id="fill-color" value="#ffffff">
-    <label>Width</label><input type="number" id="line-width" value="2" min="1" max="20">
+    <label>Width</label><input type="number" id="line-width" value="2" min="0" max="20">
+    <label class="check-inline"><input type="checkbox" id="borderless">No border</label>
     <div class="separator"></div>
     <button id="btn-undo" title="Undo (Ctrl+Z)">↶ Undo</button>
     <button id="btn-redo" title="Redo (Ctrl+Y)">↷ Redo</button>
     <button id="btn-delete" title="Delete selected (Del)">🗑 Delete</button>
+    <button id="btn-edit-label" title="Edit selected label (F2)">✎ Label</button>
+    <button id="btn-group" title="Group selected (Ctrl+G)">Group</button>
+    <button id="btn-ungroup" title="Ungroup selected (Ctrl+Shift+G)">Ungroup</button>
+    <button id="btn-snap" title="Grid Snap (S)">⊞ Snap</button>
+    <div class="row-break"></div>
     <div class="separator"></div>
     <input id="template-name" type="text" placeholder="Template name">
     <button id="btn-save-template" title="Save current diagram as template">Save Template</button>
+    <button id="btn-save-template-svg" title="Save current diagram as SVG template">Save Template SVG</button>
     <button id="btn-toggle-templates" title="Show templates">Templates</button>
     <div class="separator"></div>
     <button id="btn-save" title="Save SVG">💾 Save</button>
