@@ -85,9 +85,6 @@ export class DiagramPanel {
 
   private async onMessage(msg: WebviewToExtMessage): Promise<void> {
     switch (msg.command) {
-      case "save":
-        await this.handleSave(msg.svgContent);
-        break;
       case "ready":
         await this.postTemplatesList();
         break;
@@ -134,40 +131,6 @@ export class DiagramPanel {
   private async postTemplatesList(): Promise<void> {
     const templates = await listTemplates();
     this.postMessage({ command: "templatesList", templates });
-  }
-
-  private async handleSave(svgContent: string): Promise<void> {
-    if (this.existingSvgUri) {
-      // Overwrite existing SVG
-      await saveSvgFile(this.existingSvgUri, svgContent);
-      vscode.window.showInformationMessage(
-        `SVG saved: ${this.existingSvgUri.fsPath}`,
-      );
-      return;
-    }
-
-    // New diagram: resolve path and save
-    if (!this.mdEditor || this.mdEditor.document.isClosed) {
-      this.mdEditor = vscode.window.visibleTextEditors.find(
-        (e) => e.document.languageId === "markdown",
-      );
-    }
-
-    if (!this.mdEditor) {
-      vscode.window.showErrorMessage("No Markdown editor found to insert the link.");
-      return;
-    }
-
-    const result = await resolveNewSvgPath(this.mdEditor.document.uri);
-    if (!result) {
-      return;
-    }
-
-    const [fileUri, relativePath] = result;
-    await saveSvgFile(fileUri, svgContent);
-    await insertMarkdownLink(this.mdEditor, relativePath);
-    this.existingSvgUri = fileUri;
-    vscode.window.showInformationMessage(`SVG saved: ${relativePath}`);
   }
 
   private getHtmlContent(): string {
