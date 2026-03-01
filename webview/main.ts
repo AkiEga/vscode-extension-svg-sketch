@@ -1,5 +1,5 @@
 import { CanvasEditor } from "./canvas/CanvasEditor";
-import { reviveShapes } from "./shared";
+import { reviveShapes, RectShape, EllipseShape, ArrowShape, TextShape, TableShape } from "./shared";
 import type {
   ToolType,
   DiagramData,
@@ -132,7 +132,7 @@ btnSaveTemplate.addEventListener("click", () => {
   if (!name || shapes.length === 0) {
     return;
   }
-  postMessage({ command: "saveTemplate", name, shapes });
+  postMessage({ command: "saveTemplate", name, shapes: JSON.parse(JSON.stringify(shapes)) as ShapeJSON[] });
 });
 
 btnToggleTemplates.addEventListener("click", () => {
@@ -247,46 +247,38 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
 
   for (const shape of shapes) {
     const common = `data-shape-id="${shape.id}" stroke="${shape.stroke}" fill="${shape.fill}" stroke-width="${shape.lineWidth}"`;
-    switch (shape.type) {
-      case "rect":
-        lines.push(`  <rect ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"/>`);
-        break;
-      case "ellipse":
-        lines.push(`  <ellipse ${common} cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`);
-        break;
-      case "arrow":
-        lines.push(`  <line ${common} x1="${shape.x1}" y1="${shape.y1}" x2="${shape.x2}" y2="${shape.y2}" marker-end="url(#arrowhead)" style="color:${shape.stroke}"/>`);
-        break;
-      case "text": {
-        const escaped = shape.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="sans-serif">${escaped}</text>`);
-        break;
+    if (shape instanceof RectShape) {
+      lines.push(`  <rect ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"/>`);
+    } else if (shape instanceof EllipseShape) {
+      lines.push(`  <ellipse ${common} cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`);
+    } else if (shape instanceof ArrowShape) {
+      lines.push(`  <line ${common} x1="${shape.x1}" y1="${shape.y1}" x2="${shape.x2}" y2="${shape.y2}" marker-end="url(#arrowhead)" style="color:${shape.stroke}"/>`);
+    } else if (shape instanceof TextShape) {
+      const escaped = shape.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      lines.push(`  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="sans-serif">${escaped}</text>`);
+    } else if (shape instanceof TableShape) {
+      const { x: tx, y: ty, width: tw, height: th, rows, cols, cells, fontSize } = shape;
+      const colW = tw / cols;
+      const rowH = th / rows;
+      lines.push(`  <g ${common} data-table-rows="${rows}" data-table-cols="${cols}">`);
+      lines.push(`    <rect x="${tx}" y="${ty}" width="${tw}" height="${th}" fill="${shape.fill}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
+      lines.push(`    <rect x="${tx}" y="${ty}" width="${tw}" height="${rowH}" fill="#e5e7eb" stroke="none"/>`);
+      for (let r = 1; r < rows; r++) {
+        lines.push(`    <line x1="${tx}" y1="${ty + r * rowH}" x2="${tx + tw}" y2="${ty + r * rowH}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
       }
-      case "table": {
-        const { x: tx, y: ty, width: tw, height: th, rows, cols, cells, fontSize } = shape;
-        const colW = tw / cols;
-        const rowH = th / rows;
-        lines.push(`  <g ${common} data-table-rows="${rows}" data-table-cols="${cols}">`);
-        lines.push(`    <rect x="${tx}" y="${ty}" width="${tw}" height="${th}" fill="${shape.fill}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
-        lines.push(`    <rect x="${tx}" y="${ty}" width="${tw}" height="${rowH}" fill="#e5e7eb" stroke="none"/>`);
-        for (let r = 1; r < rows; r++) {
-          lines.push(`    <line x1="${tx}" y1="${ty + r * rowH}" x2="${tx + tw}" y2="${ty + r * rowH}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
-        }
-        for (let c = 1; c < cols; c++) {
-          lines.push(`    <line x1="${tx + c * colW}" y1="${ty}" x2="${tx + c * colW}" y2="${ty + th}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
-        }
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            const t = cells[r]?.[c];
-            if (t) {
-              const esc = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-              lines.push(`    <text x="${tx + c * colW + 6}" y="${ty + r * rowH + rowH / 2}" font-size="${fontSize}" font-family="sans-serif" fill="${shape.stroke}" dominant-baseline="central">${esc}</text>`);
-            }
+      for (let c = 1; c < cols; c++) {
+        lines.push(`    <line x1="${tx + c * colW}" y1="${ty}" x2="${tx + c * colW}" y2="${ty + th}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
+      }
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const t = cells[r]?.[c];
+          if (t) {
+            const esc = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            lines.push(`    <text x="${tx + c * colW + 6}" y="${ty + r * rowH + rowH / 2}" font-size="${fontSize}" font-family="sans-serif" fill="${shape.stroke}" dominant-baseline="central">${esc}</text>`);
           }
         }
-        lines.push("  </g>");
-        break;
       }
+      lines.push("  </g>");
     }
   }
 
