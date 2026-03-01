@@ -8,7 +8,7 @@ import {
 } from "./fileUtils";
 
 export class DiagramPanel {
-  public static readonly viewType = "markdownSvgSketch.editor";
+  public static readonly viewType = "svgSketch.editor";
   private static instance: DiagramPanel | undefined;
 
   private readonly panel: vscode.WebviewPanel;

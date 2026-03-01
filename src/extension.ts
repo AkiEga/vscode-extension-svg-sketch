@@ -16,7 +16,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // New SVG command — create an untitled .svg and open it in the custom editor
   context.subscriptions.push(
-    vscode.commands.registerCommand("markdown-svg-sketch.newDiagram", async () => {
+    vscode.commands.registerCommand("svg-sketch.newDiagram", async () => {
       const uri = vscode.Uri.parse("untitled:new.svg");
       await vscode.commands.executeCommand("vscode.openWith", uri, SvgEditorProvider.viewType);
     }),

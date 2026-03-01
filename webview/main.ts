@@ -229,7 +229,7 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
   const lines: string[] = [];
   lines.push(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"`,
-    `  data-editor="markdown-svg-sketch"`,
+    `  data-editor="svg-sketch"`,
     `  data-diagram='${dataAttr}'>`,
   );
 

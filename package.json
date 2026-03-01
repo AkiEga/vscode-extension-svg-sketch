@@ -1,5 +1,5 @@
 {
-  "name": "markdown-svg-sketch",
+  "name": "svg-sketch",
   "displayName": "SVG Sketch",
   "description": "A simple shape editor for creating and editing SVG diagrams in VS Code",
   "version": "0.0.1",
@@ -15,23 +15,23 @@
   "contributes": {
     "commands": [
       {
-        "command": "markdown-svg-sketch.newDiagram",
+        "command": "svg-sketch.newDiagram",
         "title": "SVG Sketch: New SVG"
       }
     ],
     "configuration": {
       "title": "SVG Sketch",
       "properties": {
-        "markdown-svg-sketch.templateDir": {
+        "svg-sketch.templateDir": {
           "type": "string",
-          "default": ".markdown-svg-sketch/templates",
+          "default": ".svg-sketch/templates",
           "description": "Directory to store diagram templates (relative to workspace root)"
         }
       }
     },
     "customEditors": [
       {
-        "viewType": "markdownSvgSketch.svgEditor",
+        "viewType": "svgSketch.svgEditor",
         "displayName": "SVG Sketch Editor",
         "selector": [
           {

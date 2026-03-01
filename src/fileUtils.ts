@@ -11,8 +11,8 @@ function getTemplateDirectoryUri(): vscode.Uri | undefined {
   if (!root) {
     return undefined;
   }
-  const config = vscode.workspace.getConfiguration("markdown-svg-sketch");
-  const templateDir = config.get<string>("templateDir", ".markdown-svg-sketch/templates");
+  const config = vscode.workspace.getConfiguration("svg-sketch");
+  const templateDir = config.get<string>("templateDir", ".svg-sketch/templates");
   return vscode.Uri.joinPath(root, templateDir);
 }
 

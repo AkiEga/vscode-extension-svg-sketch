@@ -10,7 +10,7 @@ describe("shapesToSvg", () => {
     expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
     expect(svg).toContain('width="800"');
     expect(svg).toContain('height="600"');
-    expect(svg).toContain('data-editor="markdown-svg-sketch"');
+    expect(svg).toContain('data-editor="svg-sketch"');
     expect(svg).toContain("<defs>");
     expect(svg).toContain("</svg>");
   });

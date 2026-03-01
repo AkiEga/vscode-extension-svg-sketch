@@ -13,7 +13,7 @@ import {
  * Markdown SVG Sketch canvas editor.
  */
 export class SvgEditorProvider implements vscode.CustomTextEditorProvider {
-  public static readonly viewType = "markdownSvgSketch.svgEditor";
+  public static readonly viewType = "svgSketch.svgEditor";
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 

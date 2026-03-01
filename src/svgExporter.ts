@@ -7,7 +7,7 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
   const lines: string[] = [];
   lines.push(
     `<svg xmlns="${SVG_NS}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"`,
-    `  data-editor="markdown-svg-sketch"`,
+    `  data-editor="svg-sketch"`,
     `  data-diagram='${JSON.stringify({ version: 1, shapes } satisfies DiagramData)}'>`,
   );
 

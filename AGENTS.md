@@ -1,4 +1,4 @@
-# Project Guidelines — Markdown SVG Sketch
+# Project Guidelines — SVG Sketch
 
 VS Code 拡張機能。Markdown 執筆中に SVG 形式の図を Canvas ベースのエディタで作成・編集する。
 

@@ -96,8 +96,8 @@
 
 | キー | 型 | デフォルト | 説明 |
 |------|----|-----------|------|
-| `markdown-svg-sketch.imgDir` | string | `"img"` | SVG 保存先ディレクトリ（Markdown ファイルからの相対パス） |
-| `markdown-svg-sketch.filePrefix` | string | `"diagram"` | 生成される SVG ファイル名のプレフィックス |
+| `svg-sketch.imgDir` | string | `"img"` | SVG 保存先ディレクトリ（Markdown ファイルからの相対パス） |
+| `svg-sketch.filePrefix` | string | `"diagram"` | 生成される SVG ファイル名のプレフィックス |
 
 ---
 
