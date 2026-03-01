@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { Shape, DiagramTemplate, DiagramTemplateSummary } from "./types";
+import { type Shape, type DiagramTemplate, type DiagramTemplateSummary, type ShapeJSON, RectShape, TextShape, ArrowShape, reviveShapes } from "./types";
 import { shapesToSvg } from "./svgExporter";
 
 function getWorkspaceRoot(): vscode.Uri | undefined {
@@ -57,11 +57,13 @@ function createTemplateId(): string {
 
 function asTemplate(content: string): DiagramTemplate | undefined {
   try {
-    const parsed = JSON.parse(content) as DiagramTemplate;
+    const parsed = JSON.parse(content) as { id?: string; name?: string; diagram?: { shapes?: ShapeJSON[] }; [key: string]: unknown };
     if (!parsed?.id || !parsed?.name || !parsed?.diagram?.shapes) {
       return undefined;
     }
-    return parsed;
+    const template = parsed as unknown as DiagramTemplate;
+    template.diagram.shapes = reviveShapes(parsed.diagram.shapes as ShapeJSON[]);
+    return template;
   } catch {
     return undefined;
   }
@@ -94,31 +96,31 @@ export async function ensureTemplateStorageWithSeed(): Promise<void> {
     {
       name: "Steps",
       shapes: [
-        { id: "s1", type: "rect", x: 60, y: 80, width: 180, height: 90, stroke: "#1f5bff", fill: "#e8f0ff", lineWidth: 2 },
-        { id: "s2", type: "text", x: 95, y: 135, text: "Step 1", fontSize: 24, stroke: "#1f5bff", fill: "#1f5bff", lineWidth: 1 },
-        { id: "s3", type: "arrow", x1: 250, y1: 125, x2: 360, y2: 125, stroke: "#364152", fill: "none", lineWidth: 3 },
-        { id: "s4", type: "rect", x: 370, y: 80, width: 180, height: 90, stroke: "#1f5bff", fill: "#e8f0ff", lineWidth: 2 },
-        { id: "s5", type: "text", x: 405, y: 135, text: "Step 2", fontSize: 24, stroke: "#1f5bff", fill: "#1f5bff", lineWidth: 1 },
+        new RectShape({ id: "s1", x: 60, y: 80, width: 180, height: 90, stroke: "#1f5bff", fill: "#e8f0ff", lineWidth: 2 }),
+        new TextShape({ id: "s2", x: 95, y: 135, text: "Step 1", fontSize: 24, stroke: "#1f5bff", fill: "#1f5bff", lineWidth: 1 }),
+        new ArrowShape({ id: "s3", x1: 250, y1: 125, x2: 360, y2: 125, stroke: "#364152", fill: "none", lineWidth: 3 }),
+        new RectShape({ id: "s4", x: 370, y: 80, width: 180, height: 90, stroke: "#1f5bff", fill: "#e8f0ff", lineWidth: 2 }),
+        new TextShape({ id: "s5", x: 405, y: 135, text: "Step 2", fontSize: 24, stroke: "#1f5bff", fill: "#1f5bff", lineWidth: 1 }),
       ],
     },
     {
       name: "Comparison",
       shapes: [
-        { id: "c1", type: "rect", x: 70, y: 70, width: 250, height: 210, stroke: "#0f766e", fill: "#ecfdf5", lineWidth: 2 },
-        { id: "c2", type: "text", x: 165, y: 105, text: "A", fontSize: 28, stroke: "#0f766e", fill: "#0f766e", lineWidth: 1 },
-        { id: "c3", type: "rect", x: 360, y: 70, width: 250, height: 210, stroke: "#9a3412", fill: "#fff7ed", lineWidth: 2 },
-        { id: "c4", type: "text", x: 455, y: 105, text: "B", fontSize: 28, stroke: "#9a3412", fill: "#9a3412", lineWidth: 1 },
-        { id: "c5", type: "text", x: 295, y: 190, text: "vs", fontSize: 28, stroke: "#374151", fill: "#374151", lineWidth: 1 },
+        new RectShape({ id: "c1", x: 70, y: 70, width: 250, height: 210, stroke: "#0f766e", fill: "#ecfdf5", lineWidth: 2 }),
+        new TextShape({ id: "c2", x: 165, y: 105, text: "A", fontSize: 28, stroke: "#0f766e", fill: "#0f766e", lineWidth: 1 }),
+        new RectShape({ id: "c3", x: 360, y: 70, width: 250, height: 210, stroke: "#9a3412", fill: "#fff7ed", lineWidth: 2 }),
+        new TextShape({ id: "c4", x: 455, y: 105, text: "B", fontSize: 28, stroke: "#9a3412", fill: "#9a3412", lineWidth: 1 }),
+        new TextShape({ id: "c5", x: 295, y: 190, text: "vs", fontSize: 28, stroke: "#374151", fill: "#374151", lineWidth: 1 }),
       ],
     },
     {
       name: "Before-After",
       shapes: [
-        { id: "b1", type: "rect", x: 70, y: 70, width: 230, height: 220, stroke: "#7c2d12", fill: "#fef2f2", lineWidth: 2 },
-        { id: "b2", type: "text", x: 130, y: 105, text: "Before", fontSize: 24, stroke: "#7c2d12", fill: "#7c2d12", lineWidth: 1 },
-        { id: "b3", type: "arrow", x1: 320, y1: 180, x2: 410, y2: 180, stroke: "#1f2937", fill: "none", lineWidth: 4 },
-        { id: "b4", type: "rect", x: 430, y: 70, width: 230, height: 220, stroke: "#14532d", fill: "#ecfdf5", lineWidth: 2 },
-        { id: "b5", type: "text", x: 500, y: 105, text: "After", fontSize: 24, stroke: "#14532d", fill: "#14532d", lineWidth: 1 },
+        new RectShape({ id: "b1", x: 70, y: 70, width: 230, height: 220, stroke: "#7c2d12", fill: "#fef2f2", lineWidth: 2 }),
+        new TextShape({ id: "b2", x: 130, y: 105, text: "Before", fontSize: 24, stroke: "#7c2d12", fill: "#7c2d12", lineWidth: 1 }),
+        new ArrowShape({ id: "b3", x1: 320, y1: 180, x2: 410, y2: 180, stroke: "#1f2937", fill: "none", lineWidth: 4 }),
+        new RectShape({ id: "b4", x: 430, y: 70, width: 230, height: 220, stroke: "#14532d", fill: "#ecfdf5", lineWidth: 2 }),
+        new TextShape({ id: "b5", x: 500, y: 105, text: "After", fontSize: 24, stroke: "#14532d", fill: "#14532d", lineWidth: 1 }),
       ],
     },
   ];

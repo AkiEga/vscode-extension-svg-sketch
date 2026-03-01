@@ -3,6 +3,10 @@
         "/^node esbuild\\.mjs --development$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^node esbuild\\.mjs --development 2>&1$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

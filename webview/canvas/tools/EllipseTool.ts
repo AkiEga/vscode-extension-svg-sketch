@@ -1,6 +1,6 @@
-import type { Point, DrawStyle, Tool, Shape } from "../../shared";
-import { nextId } from "../../shared";
-import type { EllipseShape } from "../../../src/types";
+import type { Point, DrawStyle, Tool } from "../../shared";
+import { EllipseShape, nextId } from "../../shared";
+import type { Shape } from "../../shared";
 
 export class EllipseTool implements Tool {
   private start: Point | undefined;
@@ -33,14 +33,13 @@ export class EllipseTool implements Tool {
   private buildShape(): EllipseShape {
     const s = this.start!;
     const c = this.current!;
-    return {
+    return new EllipseShape({
       id: nextId(),
-      type: "ellipse",
       cx: (s.x + c.x) / 2,
       cy: (s.y + c.y) / 2,
       rx: Math.abs(c.x - s.x) / 2,
       ry: Math.abs(c.y - s.y) / 2,
       ...this.style,
-    };
+    });
   }
 }

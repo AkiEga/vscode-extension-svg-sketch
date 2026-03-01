@@ -1,4 +1,4 @@
-import type { Shape, DiagramData } from "./types";
+import { type Shape, type DiagramData, type ShapeJSON, TableShape, reviveShapes } from "./types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -60,13 +60,14 @@ export function parseDiagramData(svgContent: string): DiagramData | undefined {
     return undefined;
   }
   try {
-    return JSON.parse(match[1]) as DiagramData;
+    const parsed = JSON.parse(match[1]) as { version: 1; shapes: ShapeJSON[] };
+    return { version: parsed.version, shapes: reviveShapes(parsed.shapes) };
   } catch {
     return undefined;
   }
 }
 
-function renderTableSvg(shape: import("./types").TableShape, common: string): string[] {
+function renderTableSvg(shape: TableShape, common: string): string[] {
   const { x, y, width, height, rows, cols, cells, fontSize } = shape;
   const colW = width / cols;
   const rowH = height / rows;

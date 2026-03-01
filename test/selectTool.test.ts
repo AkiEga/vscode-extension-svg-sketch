@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { SelectTool } from "../webview/canvas/tools/SelectTool";
-import type { RectShape, EllipseShape, ArrowShape, Shape } from "../src/types";
+import { RectShape, EllipseShape, ArrowShape, type Shape } from "../src/types";
 import type { DrawStyle } from "../webview/shared";
 
 const style: DrawStyle = { stroke: "#000", fill: "#fff", lineWidth: 2 };
 
 function makeRect(id: string, x: number, y: number, w: number, h: number): RectShape {
-  return { id, type: "rect", x, y, width: w, height: h, stroke: "#000", fill: "#fff", lineWidth: 2 };
+  return new RectShape({ id, x, y, width: w, height: h, stroke: "#000", fill: "#fff", lineWidth: 2 });
 }
 
 // --- FR-2 Select: 選択・移動ツール ---
@@ -72,10 +72,10 @@ describe("SelectTool", () => {
   });
 
   it("ドラッグで ellipse を移動できる", () => {
-    const ellipse: EllipseShape = {
-      id: "e1", type: "ellipse", cx: 300, cy: 300, rx: 50, ry: 30,
+    const ellipse = new EllipseShape({
+      id: "e1", cx: 300, cy: 300, rx: 50, ry: 30,
       stroke: "#000", fill: "#fff", lineWidth: 2,
-    };
+    });
     shapes.push(ellipse);
     tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
 
@@ -90,10 +90,10 @@ describe("SelectTool", () => {
   });
 
   it("ドラッグで arrow を移動できる (両端が同量移動)", () => {
-    const arrow: ArrowShape = {
-      id: "a1", type: "arrow", x1: 100, y1: 100, x2: 200, y2: 200,
+    const arrow = new ArrowShape({
+      id: "a1", x1: 100, y1: 100, x2: 200, y2: 200,
       stroke: "#000", fill: "none", lineWidth: 2,
-    };
+    });
     shapes.push(arrow);
     tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
 
@@ -179,10 +179,10 @@ describe("SelectTool – handle resize", () => {
   });
 
   it("ellipse の BR ハンドルドラッグでサイズ変更できる", () => {
-    const ellipse: EllipseShape = {
-      id: "e1", type: "ellipse", cx: 200, cy: 200, rx: 60, ry: 40,
+    const ellipse = new EllipseShape({
+      id: "e1", cx: 200, cy: 200, rx: 60, ry: 40,
       stroke: "#000", fill: "#fff", lineWidth: 2,
-    };
+    });
     shapes = [ellipse];
     tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
 
@@ -200,10 +200,10 @@ describe("SelectTool – handle resize", () => {
   });
 
   it("arrow の start ハンドルドラッグで始点を変更できる", () => {
-    const arrow: ArrowShape = {
-      id: "a1", type: "arrow", x1: 100, y1: 100, x2: 300, y2: 200,
+    const arrow = new ArrowShape({
+      id: "a1", x1: 100, y1: 100, x2: 300, y2: 200,
       stroke: "#000", fill: "none", lineWidth: 2,
-    };
+    });
     shapes = [arrow];
     tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
 
@@ -223,10 +223,10 @@ describe("SelectTool – handle resize", () => {
   });
 
   it("arrow の end ハンドルドラッグで終点を変更できる", () => {
-    const arrow: ArrowShape = {
-      id: "a1", type: "arrow", x1: 100, y1: 100, x2: 300, y2: 200,
+    const arrow = new ArrowShape({
+      id: "a1", x1: 100, y1: 100, x2: 300, y2: 200,
       stroke: "#000", fill: "none", lineWidth: 2,
-    };
+    });
     shapes = [arrow];
     tool = new SelectTool(shapes, (id) => { selectedId = id; }, () => { undoPushCount++; });
 

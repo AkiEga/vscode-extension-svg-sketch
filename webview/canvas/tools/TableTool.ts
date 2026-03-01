@@ -1,6 +1,6 @@
-import type { Point, DrawStyle, Tool, Shape } from "../../shared";
-import { nextId } from "../../shared";
-import type { TableShape } from "../../../src/types";
+import type { Point, DrawStyle, Tool } from "../../shared";
+import { TableShape, nextId } from "../../shared";
+import type { Shape } from "../../shared";
 
 export type TableConfigRequest = {
   pt: Point;
@@ -54,9 +54,8 @@ export class TableTool implements Tool {
     if (!this.start || !this.current) { return undefined; }
     const s = this.start;
     const c = this.current;
-    return {
+    return new TableShape({
       id: "preview",
-      type: "table",
       x: Math.min(s.x, c.x),
       y: Math.min(s.y, c.y),
       width: Math.max(Math.abs(c.x - s.x), 120),
@@ -66,7 +65,7 @@ export class TableTool implements Tool {
       cells: [["H1", "H2", "H3"], ["", "", ""], ["", "", ""]],
       fontSize: 12,
       ...this.style,
-    };
+    });
   }
 
   static createShape(
@@ -86,9 +85,8 @@ export class TableTool implements Tool {
       cells.push(row);
     }
 
-    return {
+    return new TableShape({
       id: nextId(),
-      type: "table",
       x: pt.x,
       y: pt.y,
       width: Math.max(width, cols * 60),
@@ -98,6 +96,6 @@ export class TableTool implements Tool {
       cells,
       fontSize: 12,
       ...style,
-    };
+    });
   }
 }

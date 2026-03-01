@@ -1,6 +1,6 @@
-import type { Point, DrawStyle, Tool, Shape } from "../../shared";
-import { nextId } from "../../shared";
-import type { TextShape } from "../../../src/types";
+import type { Point, DrawStyle, Tool } from "../../shared";
+import { TextShape, nextId } from "../../shared";
+import type { Shape } from "../../shared";
 
 export type TextInputRequest = {
   pt: Point;
@@ -41,9 +41,8 @@ export class TextTool implements Tool {
   }
 
   createShape(pt: Point, style: DrawStyle, text: string): TextShape {
-    return {
+    return new TextShape({
       id: nextId(),
-      type: "text",
       x: pt.x,
       y: pt.y,
       text,
@@ -51,7 +50,7 @@ export class TextTool implements Tool {
       stroke: style.stroke,
       fill: style.stroke, // text uses stroke color as fill
       lineWidth: style.lineWidth,
-    };
+    });
   }
 
   getPreview(): Shape | undefined {

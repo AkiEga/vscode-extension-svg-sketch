@@ -1,4 +1,5 @@
-import type { Shape } from "../shared";
+import { Shape, ArrowShape, TableShape } from "../shared";
+import type { Point } from "../shared";
 import { getShapeHandles } from "./tools/SelectTool";
 
 const HANDLE_SIZE = 6;
@@ -117,7 +118,7 @@ function drawArrow(
   ctx.fill();
 }
 
-function drawTable(ctx: CanvasRenderingContext2D, shape: import("../../src/types").TableShape): void {
+function drawTable(ctx: CanvasRenderingContext2D, shape: TableShape): void {
   const { x, y, width, height, rows, cols, cells, fontSize } = shape;
   const colW = width / cols;
   const rowH = height / rows;
@@ -191,7 +192,7 @@ function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Shape): vo
   }
 
   // For arrows, also draw endpoint handles
-  if (shape.type === "arrow") {
+  if (shape instanceof ArrowShape) {
     ctx.fillStyle = "#d94a4a";
     const endpoints = [
       { x: shape.x1, y: shape.y1 },

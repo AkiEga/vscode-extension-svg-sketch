@@ -3,7 +3,7 @@ import { RectTool } from "../webview/canvas/tools/RectTool";
 import { EllipseTool } from "../webview/canvas/tools/EllipseTool";
 import { ArrowTool } from "../webview/canvas/tools/ArrowTool";
 import type { DrawStyle } from "../webview/shared";
-import type { RectShape, EllipseShape, ArrowShape } from "../src/types";
+import { RectShape, EllipseShape, ArrowShape } from "../src/types";
 
 const defaultStyle: DrawStyle = { stroke: "#000", fill: "#fff", lineWidth: 2 };
 

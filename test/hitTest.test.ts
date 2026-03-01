@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { hitTest } from "../webview/shared";
-import type { RectShape, EllipseShape, ArrowShape, TextShape } from "../src/types";
+import { RectShape, EllipseShape, ArrowShape, TextShape } from "../src/types";
 
 // --- FR-2 Select: hitTest によるクリック選択判定 ---
 
@@ -8,10 +8,10 @@ describe("hitTest", () => {
 
   // --- Rect ---
   describe("rect", () => {
-    const rect: RectShape = {
-      id: "r1", type: "rect", x: 100, y: 100, width: 200, height: 100,
+    const rect = new RectShape({
+      id: "r1", x: 100, y: 100, width: 200, height: 100,
       stroke: "#000", fill: "#fff", lineWidth: 2,
-    };
+    });
 
     it("矩形の内部でヒットする", () => {
       expect(hitTest(rect, { x: 150, y: 150 })).toBe(true);
@@ -40,10 +40,10 @@ describe("hitTest", () => {
 
   // --- Ellipse ---
   describe("ellipse", () => {
-    const ellipse: EllipseShape = {
-      id: "e1", type: "ellipse", cx: 200, cy: 200, rx: 80, ry: 50,
+    const ellipse = new EllipseShape({
+      id: "e1", cx: 200, cy: 200, rx: 80, ry: 50,
       stroke: "#000", fill: "#fff", lineWidth: 2,
-    };
+    });
 
     it("楕円の中心でヒットする", () => {
       expect(hitTest(ellipse, { x: 200, y: 200 })).toBe(true);
@@ -65,10 +65,10 @@ describe("hitTest", () => {
 
   // --- Arrow ---
   describe("arrow", () => {
-    const arrow: ArrowShape = {
-      id: "a1", type: "arrow", x1: 100, y1: 100, x2: 300, y2: 100,
+    const arrow = new ArrowShape({
+      id: "a1", x1: 100, y1: 100, x2: 300, y2: 100,
       stroke: "#000", fill: "none", lineWidth: 2,
-    };
+    });
 
     it("線分上の点でヒットする", () => {
       expect(hitTest(arrow, { x: 200, y: 100 })).toBe(true);
@@ -92,28 +92,28 @@ describe("hitTest", () => {
     });
 
     it("斜め矢印の中点でヒットする", () => {
-      const diag: ArrowShape = {
-        id: "a2", type: "arrow", x1: 0, y1: 0, x2: 100, y2: 100,
+      const diag = new ArrowShape({
+        id: "a2", x1: 0, y1: 0, x2: 100, y2: 100,
         stroke: "#000", fill: "none", lineWidth: 2,
-      };
+      });
       expect(hitTest(diag, { x: 50, y: 50 })).toBe(true);
     });
 
     it("長さゼロの矢印 (同一点) でヒットする", () => {
-      const zero: ArrowShape = {
-        id: "a3", type: "arrow", x1: 50, y1: 50, x2: 50, y2: 50,
+      const zero = new ArrowShape({
+        id: "a3", x1: 50, y1: 50, x2: 50, y2: 50,
         stroke: "#000", fill: "none", lineWidth: 2,
-      };
+      });
       expect(hitTest(zero, { x: 50, y: 50 })).toBe(true);
     });
   });
 
   // --- Text ---
   describe("text", () => {
-    const text: TextShape = {
-      id: "t1", type: "text", x: 100, y: 200, text: "Hello",
+    const text = new TextShape({
+      id: "t1", x: 100, y: 200, text: "Hello",
       fontSize: 16, stroke: "#000", fill: "#000", lineWidth: 1,
-    };
+    });
 
     it("テキスト領域内でヒットする", () => {
       // テキストの高さは y-fontSize 〜 y の範囲

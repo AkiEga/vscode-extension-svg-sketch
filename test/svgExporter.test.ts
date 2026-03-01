@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { shapesToSvg, parseDiagramData } from "../src/svgExporter";
-import type { RectShape, EllipseShape, ArrowShape, TextShape, Shape } from "../src/types";
+import { RectShape, EllipseShape, ArrowShape, TextShape, type Shape } from "../src/types";
 
 // --- FR-4: SVG ファイル保存 ---
 
@@ -16,10 +16,10 @@ describe("shapesToSvg", () => {
   });
 
   it("rect を正しい SVG 要素に変換する", () => {
-    const rect: RectShape = {
-      id: "r1", type: "rect", x: 10, y: 20, width: 100, height: 50,
+    const rect = new RectShape({
+      id: "r1", x: 10, y: 20, width: 100, height: 50,
       stroke: "#000", fill: "#fff", lineWidth: 2,
-    };
+    });
     const svg = shapesToSvg([rect]);
     expect(svg).toContain('<rect');
     expect(svg).toContain('x="10"');
@@ -33,10 +33,10 @@ describe("shapesToSvg", () => {
   });
 
   it("ellipse を正しい SVG 要素に変換する", () => {
-    const ellipse: EllipseShape = {
-      id: "e1", type: "ellipse", cx: 100, cy: 100, rx: 50, ry: 30,
+    const ellipse = new EllipseShape({
+      id: "e1", cx: 100, cy: 100, rx: 50, ry: 30,
       stroke: "#333", fill: "none", lineWidth: 1,
-    };
+    });
     const svg = shapesToSvg([ellipse]);
     expect(svg).toContain('<ellipse');
     expect(svg).toContain('cx="100"');
@@ -46,10 +46,10 @@ describe("shapesToSvg", () => {
   });
 
   it("arrow を line + arrowhead marker に変換する", () => {
-    const arrow: ArrowShape = {
-      id: "a1", type: "arrow", x1: 0, y1: 0, x2: 100, y2: 100,
+    const arrow = new ArrowShape({
+      id: "a1", x1: 0, y1: 0, x2: 100, y2: 100,
       stroke: "#f00", fill: "none", lineWidth: 3,
-    };
+    });
     const svg = shapesToSvg([arrow]);
     expect(svg).toContain('<line');
     expect(svg).toContain('x1="0"');
@@ -61,10 +61,10 @@ describe("shapesToSvg", () => {
   });
 
   it("text を正しい SVG 要素に変換し、特殊文字をエスケープする", () => {
-    const text: TextShape = {
-      id: "t1", type: "text", x: 50, y: 80, text: '<Hello> & "World"',
+    const text = new TextShape({
+      id: "t1", x: 50, y: 80, text: '<Hello> & "World"',
       fontSize: 16, stroke: "#000", fill: "#000", lineWidth: 1,
-    };
+    });
     const svg = shapesToSvg([text]);
     expect(svg).toContain('<text');
     expect(svg).toContain('x="50"');
@@ -77,9 +77,9 @@ describe("shapesToSvg", () => {
 
   it("複数の shapes を含む SVG を生成する", () => {
     const shapes: Shape[] = [
-      { id: "r1", type: "rect", x: 0, y: 0, width: 50, height: 50, stroke: "#000", fill: "#fff", lineWidth: 1 },
-      { id: "e1", type: "ellipse", cx: 100, cy: 100, rx: 30, ry: 20, stroke: "#000", fill: "#fff", lineWidth: 1 },
-      { id: "a1", type: "arrow", x1: 50, y1: 25, x2: 70, y2: 100, stroke: "#000", fill: "none", lineWidth: 1 },
+      new RectShape({ id: "r1", x: 0, y: 0, width: 50, height: 50, stroke: "#000", fill: "#fff", lineWidth: 1 }),
+      new EllipseShape({ id: "e1", cx: 100, cy: 100, rx: 30, ry: 20, stroke: "#000", fill: "#fff", lineWidth: 1 }),
+      new ArrowShape({ id: "a1", x1: 50, y1: 25, x2: 70, y2: 100, stroke: "#000", fill: "none", lineWidth: 1 }),
     ];
     const svg = shapesToSvg(shapes);
     expect(svg).toContain('<rect');
@@ -95,10 +95,10 @@ describe("shapesToSvg", () => {
   });
 
   it("data-diagram 属性に shapes の JSON を埋め込む", () => {
-    const rect: RectShape = {
-      id: "r1", type: "rect", x: 10, y: 20, width: 100, height: 50,
+    const rect = new RectShape({
+      id: "r1", x: 10, y: 20, width: 100, height: 50,
       stroke: "#000", fill: "#fff", lineWidth: 2,
-    };
+    });
     const svg = shapesToSvg([rect]);
     expect(svg).toContain("data-diagram='");
     // JSON should contain the shape data
@@ -115,10 +115,10 @@ describe("shapesToSvg", () => {
 
 describe("parseDiagramData", () => {
   it("有効な SVG から DiagramData をパースできる", () => {
-    const rect: RectShape = {
-      id: "r1", type: "rect", x: 10, y: 20, width: 100, height: 50,
+    const rect = new RectShape({
+      id: "r1", x: 10, y: 20, width: 100, height: 50,
       stroke: "#000", fill: "#fff", lineWidth: 2,
-    };
+    });
     const svg = shapesToSvg([rect]);
     const data = parseDiagramData(svg);
     expect(data).toBeDefined();
@@ -139,10 +139,10 @@ describe("parseDiagramData", () => {
 
   it("shapesToSvg → parseDiagramData のラウンドトリップが成功する", () => {
     const shapes: Shape[] = [
-      { id: "r1", type: "rect", x: 10, y: 20, width: 100, height: 50, stroke: "#000", fill: "#fff", lineWidth: 2 },
-      { id: "e1", type: "ellipse", cx: 200, cy: 150, rx: 60, ry: 40, stroke: "#333", fill: "none", lineWidth: 1 },
-      { id: "a1", type: "arrow", x1: 110, y1: 45, x2: 140, y2: 150, stroke: "#f00", fill: "none", lineWidth: 2 },
-      { id: "t1", type: "text", x: 50, y: 300, text: "Hello", fontSize: 16, stroke: "#000", fill: "#000", lineWidth: 1 },
+      new RectShape({ id: "r1", x: 10, y: 20, width: 100, height: 50, stroke: "#000", fill: "#fff", lineWidth: 2 }),
+      new EllipseShape({ id: "e1", cx: 200, cy: 150, rx: 60, ry: 40, stroke: "#333", fill: "none", lineWidth: 1 }),
+      new ArrowShape({ id: "a1", x1: 110, y1: 45, x2: 140, y2: 150, stroke: "#f00", fill: "none", lineWidth: 2 }),
+      new TextShape({ id: "t1", x: 50, y: 300, text: "Hello", fontSize: 16, stroke: "#000", fill: "#000", lineWidth: 1 }),
     ];
     const svg = shapesToSvg(shapes, 800, 600);
     const data = parseDiagramData(svg);

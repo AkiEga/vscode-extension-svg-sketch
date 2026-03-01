@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { WebviewToExtMessage, ExtToWebviewMessage } from "./types";
+import { reviveShapes, type WebviewToExtMessage, type ExtToWebviewMessage, type ShapeJSON } from "./types";
 import {
   saveSvgFile,
   listTemplates,
@@ -47,7 +47,7 @@ export class SvgEditorProvider implements vscode.CustomTextEditorProvider {
             await this.postTemplatesList(webviewPanel);
             break;
           case "saveTemplate": {
-            const saved = await saveTemplate(msg.name, msg.shapes);
+            const saved = await saveTemplate(msg.name, reviveShapes(msg.shapes));
             if (!saved) {
               this.postMessage(webviewPanel, {
                 command: "error",
@@ -72,7 +72,7 @@ export class SvgEditorProvider implements vscode.CustomTextEditorProvider {
               command: "templatePayload",
               templateId: template.id,
               name: template.name,
-              shapes: template.diagram.shapes,
+              shapes: template.diagram.shapes as unknown as ShapeJSON[],
             });
             break;
           }

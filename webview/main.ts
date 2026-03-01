@@ -1,8 +1,10 @@
 import { CanvasEditor } from "./canvas/CanvasEditor";
+import { reviveShapes } from "./shared";
 import type {
   ToolType,
   DiagramData,
   Shape,
+  ShapeJSON,
   DiagramTemplateSummary,
   WebviewToExtMessage,
   ExtToWebviewMessage,
@@ -22,16 +24,18 @@ function postMessage(msg: WebviewToExtMessage): void {
 }
 
 interface WebviewState {
-  shapes: Shape[];
+  shapes: ShapeJSON[];
 }
 
 function saveState(shapes: Shape[]): void {
-  vscode.setState({ shapes } satisfies WebviewState);
+  // Shape class instances are JSON-serializable (enumerable properties)
+  vscode.setState({ shapes: JSON.parse(JSON.stringify(shapes)) } satisfies WebviewState);
 }
 
 function restoreState(): Shape[] | undefined {
   const state = vscode.getState() as WebviewState | undefined;
-  return state?.shapes;
+  if (!state?.shapes) { return undefined; }
+  return reviveShapes(state.shapes);
 }
 
 // Initialize canvas editor
@@ -155,15 +159,15 @@ window.addEventListener("message", (event) => {
       }
       break;
     case "load":
-      editor.setShapes(msg.shapes);
-      saveState(msg.shapes);
+      editor.setShapes(reviveShapes(msg.shapes));
+      saveState(editor.getShapes());
       break;
     case "templatesList":
       templates = msg.templates;
       renderTemplateList(templates);
       break;
     case "templatePayload":
-      editor.insertShapes(msg.shapes);
+      editor.insertShapes(reviveShapes(msg.shapes));
       saveState(editor.getShapes());
       break;
     case "templateSaved":
@@ -295,7 +299,8 @@ function parseDiagramJson(svgContent: string): DiagramData | undefined {
   if (!match) { return undefined; }
   try {
     const raw = match[1].replace(/&#39;/g, "'");
-    return JSON.parse(raw) as DiagramData;
+    const parsed = JSON.parse(raw) as { version: 1; shapes: ShapeJSON[] };
+    return { version: parsed.version, shapes: reviveShapes(parsed.shapes) };
   } catch {
     return undefined;
   }

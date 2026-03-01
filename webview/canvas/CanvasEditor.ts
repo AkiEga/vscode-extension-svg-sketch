@@ -1,6 +1,5 @@
 import type { Shape, ToolType, DrawStyle, Point, Tool } from "../shared";
-import { hitTest } from "../shared";
-import type { TableShape, TextShape } from "../../src/types";
+import { hitTest, TextShape, TableShape } from "../shared";
 import { RectTool } from "./tools/RectTool";
 import { EllipseTool } from "./tools/EllipseTool";
 import { ArrowTool } from "./tools/ArrowTool";
@@ -188,7 +187,7 @@ export class CanvasEditor {
   }
 
   private cloneShapes(): Shape[] {
-    return JSON.parse(JSON.stringify(this.shapes));
+    return this.shapes.map(s => s.clone());
   }
 
   private setupEvents(): void {

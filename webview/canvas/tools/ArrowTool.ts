@@ -1,6 +1,6 @@
-import type { Point, DrawStyle, Tool, Shape } from "../../shared";
-import { nextId } from "../../shared";
-import type { ArrowShape } from "../../../src/types";
+import type { Point, DrawStyle, Tool } from "../../shared";
+import { ArrowShape, nextId } from "../../shared";
+import type { Shape } from "../../shared";
 
 export class ArrowTool implements Tool {
   private start: Point | undefined;
@@ -31,14 +31,13 @@ export class ArrowTool implements Tool {
   }
 
   private buildShape(): ArrowShape {
-    return {
+    return new ArrowShape({
       id: nextId(),
-      type: "arrow",
       x1: this.start!.x,
       y1: this.start!.y,
       x2: this.current!.x,
       y2: this.current!.y,
       ...this.style,
-    };
+    });
   }
 }

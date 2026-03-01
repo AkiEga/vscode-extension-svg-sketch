@@ -1,6 +1,6 @@
-import type { Point, DrawStyle, Tool, Shape } from "../../shared";
-import { nextId } from "../../shared";
-import type { RectShape } from "../../../src/types";
+import type { Point, DrawStyle, Tool } from "../../shared";
+import { RectShape, nextId } from "../../shared";
+import type { Shape } from "../../shared";
 
 export class RectTool implements Tool {
   private start: Point | undefined;
@@ -33,14 +33,13 @@ export class RectTool implements Tool {
   private buildShape(): RectShape {
     const s = this.start!;
     const c = this.current!;
-    return {
+    return new RectShape({
       id: nextId(),
-      type: "rect",
       x: Math.min(s.x, c.x),
       y: Math.min(s.y, c.y),
       width: Math.abs(c.x - s.x),
       height: Math.abs(c.y - s.y),
       ...this.style,
-    };
+    });
   }
 }

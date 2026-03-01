@@ -1,11 +1,6 @@
-import type { Shape } from "../shared";
+import type { Shape, Bounds } from "../shared";
 
-export interface Bounds {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
+export type { Bounds };
 
 export function getShapesBounds(shapes: Shape[]): Bounds | undefined {
   if (shapes.length === 0) {
@@ -18,7 +13,7 @@ export function getShapesBounds(shapes: Shape[]): Bounds | undefined {
   let maxY = Number.NEGATIVE_INFINITY;
 
   for (const shape of shapes) {
-    const b = getShapeBounds(shape);
+    const b = shape.getBounds();
     minX = Math.min(minX, b.minX);
     minY = Math.min(minY, b.minY);
     maxX = Math.max(maxX, b.maxX);
@@ -45,7 +40,11 @@ export function prepareTemplateInsertion(existingShapes: Shape[], incomingShapes
   }
 
   const { dx, dy } = chooseInsertionOffset(existingBounds, incomingBounds);
-  const shifted = incomingShapes.map((shape) => translateShape(shape, dx, dy));
+  const shifted = incomingShapes.map((shape) => {
+    const s = shape.clone();
+    s.translate(dx, dy);
+    return s;
+  });
   const { shapes, insertedIds } = withUniqueIds(shifted, new Set(existingShapes.map((s) => s.id)));
   return { shapes, insertedIds, dx, dy };
 }
@@ -94,7 +93,7 @@ function withUniqueIds(shapes: Shape[], existingIds: Set<string>): { shapes: Sha
 
     existingIds.add(id);
     insertedIds.push(id);
-    result.push({ ...shapes[i], id });
+    result.push(shapes[i].clone(id));
   }
 
   return { shapes: result, insertedIds };
