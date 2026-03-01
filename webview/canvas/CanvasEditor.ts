@@ -1,10 +1,13 @@
 import type { Shape, ToolType, DrawStyle, Point, Tool } from "../shared";
+import type { TableShape } from "../../src/types";
 import { RectTool } from "./tools/RectTool";
 import { EllipseTool } from "./tools/EllipseTool";
 import { ArrowTool } from "./tools/ArrowTool";
 import { TextTool } from "./tools/TextTool";
+import { TableTool, type TableConfigRequest } from "./tools/TableTool";
 import { SelectTool } from "./tools/SelectTool";
 import { renderShapes } from "./render";
+import { prepareTemplateInsertion } from "./templateInsert";
 
 export class CanvasEditor {
   private canvas: HTMLCanvasElement;
@@ -22,6 +25,9 @@ export class CanvasEditor {
   private redoStack: Shape[][] = [];
 
   private onSelectionChange: (id: string | undefined) => void = () => {};
+  private onChange: () => void = () => {};
+  private onToolChange: (tool: ToolType) => void = () => {};
+  private activePopupCleanup: (() => void) | undefined;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -37,6 +43,11 @@ export class CanvasEditor {
   }
 
   setTool(toolType: ToolType): void {
+    // Cancel any open popup (text input / table config) before switching
+    if (this.activePopupCleanup) {
+      this.activePopupCleanup();
+      this.activePopupCleanup = undefined;
+    }
     this.currentToolType = toolType;
     switch (toolType) {
       case "rect":
@@ -54,6 +65,12 @@ export class CanvasEditor {
         this.currentTool = textTool;
         break;
       }
+      case "table": {
+        const tableTool = new TableTool();
+        tableTool.onTableRequest = (req) => this.showTableConfig(req);
+        this.currentTool = tableTool;
+        break;
+      }
       case "select":
         this.currentTool = this.selectTool;
         break;
@@ -67,6 +84,14 @@ export class CanvasEditor {
 
   setOnSelectionChange(cb: (id: string | undefined) => void): void {
     this.onSelectionChange = cb;
+  }
+
+  setOnChange(cb: () => void): void {
+    this.onChange = cb;
+  }
+
+  setOnToolChange(cb: (tool: ToolType) => void): void {
+    this.onToolChange = cb;
   }
 
   getShapes(): Shape[] {
@@ -88,6 +113,22 @@ export class CanvasEditor {
     this.render();
   }
 
+  insertShapes(incomingShapes: Shape[]): string[] {
+    const prepared = prepareTemplateInsertion(this.shapes, incomingShapes);
+    if (prepared.shapes.length === 0) {
+      return [];
+    }
+
+    this.pushUndo();
+    this.shapes.push(...prepared.shapes);
+    const insertedIds = prepared.insertedIds;
+    this.selectedId = insertedIds[insertedIds.length - 1];
+    this.onSelectionChange(this.selectedId);
+    this.onChange();
+    this.render();
+    return insertedIds;
+  }
+
   deleteSelected(): void {
     if (!this.selectedId) { return; }
     this.pushUndo();
@@ -97,6 +138,7 @@ export class CanvasEditor {
     );
     this.selectedId = undefined;
     this.onSelectionChange(undefined);
+    this.onChange();
     this.render();
   }
 
@@ -106,6 +148,7 @@ export class CanvasEditor {
     const prev = this.undoStack.pop()!;
     this.shapes.length = 0;
     this.shapes.push(...prev);
+    this.onChange();
     this.render();
   }
 
@@ -115,6 +158,7 @@ export class CanvasEditor {
     const next = this.redoStack.pop()!;
     this.shapes.length = 0;
     this.shapes.push(...next);
+    this.onChange();
     this.render();
   }
 
@@ -135,6 +179,7 @@ export class CanvasEditor {
     this.canvas.addEventListener("mousedown", (e) => this.onMouseDown(e));
     this.canvas.addEventListener("mousemove", (e) => this.onMouseMove(e));
     this.canvas.addEventListener("mouseup", (e) => this.onMouseUp(e));
+    this.canvas.addEventListener("contextmenu", (e) => this.onContextMenu(e));
 
     window.addEventListener("resize", () => {
       this.resize();
@@ -180,6 +225,8 @@ export class CanvasEditor {
     if (shape) {
       this.pushUndo();
       this.shapes.push(shape);
+      this.onChange();
+      this.switchToSelect();
     }
     this.render();
   }
@@ -217,19 +264,26 @@ export class CanvasEditor {
     container.appendChild(input);
     input.focus();
 
+    let committed = false;
+
     const commit = () => {
+      if (committed) { return; }
+      committed = true;
       const text = input.value.trim();
       if (text) {
         const textTool = new TextTool();
         const shape = textTool.createShape(pt, style, text);
         this.pushUndo();
         this.shapes.push(shape);
+        this.onChange();
+        this.switchToSelect();
         this.render();
       }
       cleanup();
     };
 
     const cleanup = () => {
+      this.activePopupCleanup = undefined;
       input.removeEventListener("keydown", onKey);
       input.removeEventListener("blur", onBlur);
       if (input.parentElement) {
@@ -252,5 +306,326 @@ export class CanvasEditor {
 
     input.addEventListener("keydown", onKey);
     input.addEventListener("blur", onBlur);
+
+    // Register so setTool() can cancel without committing
+    this.activePopupCleanup = cleanup;
+  }
+
+  private showTableConfig(req: TableConfigRequest): void {
+    const container = this.canvas.parentElement!;
+    const rect = this.canvas.getBoundingClientRect();
+    const contRect = container.getBoundingClientRect();
+
+    const panel = document.createElement("div");
+    panel.style.position = "absolute";
+    panel.style.left = `${rect.left - contRect.left + req.pt.x}px`;
+    panel.style.top = `${rect.top - contRect.top + req.pt.y}px`;
+    panel.style.background = "var(--vscode-editorWidget-background, #fff)";
+    panel.style.border = "1px solid var(--vscode-widget-border, #007acc)";
+    panel.style.borderRadius = "4px";
+    panel.style.padding = "8px";
+    panel.style.zIndex = "10";
+    panel.style.display = "flex";
+    panel.style.gap = "6px";
+    panel.style.alignItems = "center";
+    panel.style.fontSize = "12px";
+    panel.style.color = "var(--vscode-editor-foreground, #000)";
+
+    const rowsInput = document.createElement("input");
+    rowsInput.type = "number";
+    rowsInput.min = "1";
+    rowsInput.max = "50";
+    rowsInput.value = "3";
+    rowsInput.style.width = "44px";
+    rowsInput.style.padding = "2px 4px";
+    rowsInput.style.background = "var(--vscode-input-background, #fff)";
+    rowsInput.style.color = "var(--vscode-input-foreground, #000)";
+    rowsInput.style.border = "1px solid var(--vscode-input-border, #ccc)";
+
+    const colsInput = document.createElement("input");
+    colsInput.type = "number";
+    colsInput.min = "1";
+    colsInput.max = "50";
+    colsInput.value = "3";
+    colsInput.style.width = "44px";
+    colsInput.style.padding = "2px 4px";
+    colsInput.style.background = "var(--vscode-input-background, #fff)";
+    colsInput.style.color = "var(--vscode-input-foreground, #000)";
+    colsInput.style.border = "1px solid var(--vscode-input-border, #ccc)";
+
+    const okBtn = document.createElement("button");
+    okBtn.textContent = "OK";
+    okBtn.style.padding = "2px 10px";
+    okBtn.style.cursor = "pointer";
+
+    const rowLabel = document.createElement("span");
+    rowLabel.textContent = "Rows:";
+    const colLabel = document.createElement("span");
+    colLabel.textContent = "Cols:";
+
+    panel.appendChild(rowLabel);
+    panel.appendChild(rowsInput);
+    panel.appendChild(colLabel);
+    panel.appendChild(colsInput);
+    panel.appendChild(okBtn);
+    container.appendChild(panel);
+    rowsInput.focus();
+    rowsInput.select();
+
+    const cleanup = () => {
+      this.activePopupCleanup = undefined;
+      if (panel.parentElement) {
+        panel.parentElement.removeChild(panel);
+      }
+    };
+
+    const commit = () => {
+      const rows = Math.max(1, Math.min(50, parseInt(rowsInput.value, 10) || 3));
+      const cols = Math.max(1, Math.min(50, parseInt(colsInput.value, 10) || 3));
+      const shape = TableTool.createShape(req.pt, req.width, req.height, req.style, rows, cols);
+      this.pushUndo();
+      this.shapes.push(shape);
+      this.onChange();
+      this.switchToSelect();
+      this.render();
+      cleanup();
+    };
+
+    okBtn.addEventListener("click", () => commit());
+    panel.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit();
+      } else if (e.key === "Escape") {
+        cleanup();
+      }
+    });
+
+    // Register so setTool() can cancel without committing
+    this.activePopupCleanup = cleanup;
+  }
+
+  // --- Table mutation methods ---
+
+  private switchToSelect(): void {
+    this.setTool("select");
+    this.onToolChange("select");
+  }
+
+  getSelectedShape(): Shape | undefined {
+    if (!this.selectedId) { return undefined; }
+    return this.shapes.find((s) => s.id === this.selectedId);
+  }
+
+  addTableRow(): void {
+    const shape = this.getSelectedShape();
+    if (!shape || shape.type !== "table") { return; }
+    this.pushUndo();
+    shape.rows += 1;
+    shape.cells.push(new Array(shape.cols).fill(""));
+    shape.height += shape.height / (shape.rows - 1);
+    this.onChange();
+    this.render();
+  }
+
+  deleteTableRow(): void {
+    const shape = this.getSelectedShape();
+    if (!shape || shape.type !== "table" || shape.rows <= 1) { return; }
+    this.pushUndo();
+    const rowH = shape.height / shape.rows;
+    shape.rows -= 1;
+    shape.cells.pop();
+    shape.height -= rowH;
+    this.onChange();
+    this.render();
+  }
+
+  addTableColumn(): void {
+    const shape = this.getSelectedShape();
+    if (!shape || shape.type !== "table") { return; }
+    this.pushUndo();
+    shape.cols += 1;
+    for (const row of shape.cells) {
+      row.push("");
+    }
+    shape.width += shape.width / (shape.cols - 1);
+    this.onChange();
+    this.render();
+  }
+
+  deleteTableColumn(): void {
+    const shape = this.getSelectedShape();
+    if (!shape || shape.type !== "table" || shape.cols <= 1) { return; }
+    this.pushUndo();
+    const colW = shape.width / shape.cols;
+    shape.cols -= 1;
+    for (const row of shape.cells) {
+      row.pop();
+    }
+    shape.width -= colW;
+    this.onChange();
+    this.render();
+  }
+
+  private onContextMenu(e: MouseEvent): void {
+    e.preventDefault();
+    if (!this.selectedId) { return; }
+    const shape = this.shapes.find((s) => s.id === this.selectedId);
+    if (!shape) { return; }
+
+    const pt = this.getPoint(e);
+    if (shape.type === "text") {
+      this.editTextShape(shape);
+    } else if (shape.type === "table") {
+      this.editTableCell(shape, pt);
+    }
+  }
+
+  private editTextShape(shape: import("../../src/types").TextShape): void {
+    const container = this.canvas.parentElement!;
+    const rect = this.canvas.getBoundingClientRect();
+    const contRect = container.getBoundingClientRect();
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = shape.text;
+    input.style.position = "absolute";
+    input.style.left = `${rect.left - contRect.left + shape.x}px`;
+    input.style.top = `${rect.top - contRect.top + shape.y - shape.fontSize}px`;
+    input.style.fontSize = `${shape.fontSize}px`;
+    input.style.fontFamily = "sans-serif";
+    input.style.border = "1px solid #007acc";
+    input.style.outline = "none";
+    input.style.padding = "2px 4px";
+    input.style.background = "#fff";
+    input.style.color = shape.stroke;
+    input.style.minWidth = "80px";
+    input.style.zIndex = "10";
+    container.appendChild(input);
+    input.focus();
+    input.select();
+
+    let committed = false;
+
+    const commit = () => {
+      if (committed) { return; }
+      committed = true;
+      const text = input.value.trim();
+      if (text && text !== shape.text) {
+        this.pushUndo();
+        shape.text = text;
+        this.onChange();
+        this.render();
+      }
+      cleanup();
+    };
+
+    const cleanup = () => {
+      this.activePopupCleanup = undefined;
+      input.removeEventListener("keydown", onKey);
+      input.removeEventListener("blur", onBlur);
+      if (input.parentElement) {
+        input.parentElement.removeChild(input);
+      }
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit();
+      } else if (e.key === "Escape") {
+        cleanup();
+      }
+    };
+
+    const onBlur = () => { commit(); };
+
+    input.addEventListener("keydown", onKey);
+    input.addEventListener("blur", onBlur);
+    this.activePopupCleanup = cleanup;
+  }
+
+  private editTableCell(shape: TableShape, pt: Point): void {
+    const colW = shape.width / shape.cols;
+    const rowH = shape.height / shape.rows;
+    const col = Math.floor((pt.x - shape.x) / colW);
+    const row = Math.floor((pt.y - shape.y) / rowH);
+    if (row < 0 || row >= shape.rows || col < 0 || col >= shape.cols) { return; }
+
+    const container = this.canvas.parentElement!;
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const contRect = container.getBoundingClientRect();
+
+    const cellX = shape.x + col * colW;
+    const cellY = shape.y + row * rowH;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = shape.cells[row]?.[col] ?? "";
+    input.style.position = "absolute";
+    input.style.left = `${canvasRect.left - contRect.left + cellX + 1}px`;
+    input.style.top = `${canvasRect.top - contRect.top + cellY + 1}px`;
+    input.style.width = `${colW - 2}px`;
+    input.style.height = `${rowH - 2}px`;
+    input.style.fontSize = `${shape.fontSize}px`;
+    input.style.fontFamily = "sans-serif";
+    input.style.border = "1px solid #007acc";
+    input.style.outline = "none";
+    input.style.padding = "2px 4px";
+    input.style.background = "#fff";
+    input.style.color = shape.stroke;
+    input.style.zIndex = "10";
+    input.style.boxSizing = "border-box";
+    container.appendChild(input);
+    input.focus();
+    input.select();
+
+    let committed = false;
+
+    const commit = () => {
+      if (committed) { return; }
+      committed = true;
+      const text = input.value;
+      if (text !== (shape.cells[row]?.[col] ?? "")) {
+        this.pushUndo();
+        shape.cells[row][col] = text;
+        this.onChange();
+        this.render();
+      }
+      cleanup();
+    };
+
+    const cleanup = () => {
+      this.activePopupCleanup = undefined;
+      input.removeEventListener("keydown", onKey);
+      input.removeEventListener("blur", onBlur);
+      if (input.parentElement) {
+        input.parentElement.removeChild(input);
+      }
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit();
+      } else if (e.key === "Escape") {
+        cleanup();
+      } else if (e.key === "Tab") {
+        e.preventDefault();
+        commit();
+        const nextCol = e.shiftKey ? col - 1 : col + 1;
+        if (nextCol >= 0 && nextCol < shape.cols) {
+          this.editTableCell(shape, { x: shape.x + nextCol * colW + 1, y: shape.y + row * rowH + 1 });
+        } else if (!e.shiftKey && row + 1 < shape.rows) {
+          this.editTableCell(shape, { x: shape.x + 1, y: shape.y + (row + 1) * rowH + 1 });
+        }
+      }
+    };
+
+    const onBlur = () => { commit(); };
+
+    input.addEventListener("keydown", onKey);
+    input.addEventListener("blur", onBlur);
+    this.activePopupCleanup = cleanup;
   }
 }

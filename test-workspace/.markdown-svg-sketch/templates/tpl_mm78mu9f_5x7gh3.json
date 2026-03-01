@@ -1,0 +1,67 @@
+{
+  "id": "tpl_mm78mu9f_5x7gh3",
+  "name": "Comparison",
+  "createdAt": 1772338587315,
+  "updatedAt": 1772338587315,
+  "thumbnailSvg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"320\" height=\"180\" viewBox=\"0 0 320 180\"\n  data-editor=\"markdown-svg-sketch\"\n  data-diagram='{\"version\":1,\"shapes\":[{\"id\":\"c1\",\"type\":\"rect\",\"x\":70,\"y\":70,\"width\":250,\"height\":210,\"stroke\":\"#0f766e\",\"fill\":\"#ecfdf5\",\"lineWidth\":2},{\"id\":\"c2\",\"type\":\"text\",\"x\":165,\"y\":105,\"text\":\"A\",\"fontSize\":28,\"stroke\":\"#0f766e\",\"fill\":\"#0f766e\",\"lineWidth\":1},{\"id\":\"c3\",\"type\":\"rect\",\"x\":360,\"y\":70,\"width\":250,\"height\":210,\"stroke\":\"#9a3412\",\"fill\":\"#fff7ed\",\"lineWidth\":2},{\"id\":\"c4\",\"type\":\"text\",\"x\":455,\"y\":105,\"text\":\"B\",\"fontSize\":28,\"stroke\":\"#9a3412\",\"fill\":\"#9a3412\",\"lineWidth\":1},{\"id\":\"c5\",\"type\":\"text\",\"x\":295,\"y\":190,\"text\":\"vs\",\"fontSize\":28,\"stroke\":\"#374151\",\"fill\":\"#374151\",\"lineWidth\":1}]}'>\n  <defs>\n    <marker id=\"arrowhead\" markerWidth=\"10\" markerHeight=\"7\" refX=\"10\" refY=\"3.5\" orient=\"auto\">\n      <polygon points=\"0 0, 10 3.5, 0 7\" fill=\"currentColor\"/>\n    </marker>\n  </defs>\n  <rect data-shape-id=\"c1\" stroke=\"#0f766e\" fill=\"#ecfdf5\" stroke-width=\"2\" x=\"70\" y=\"70\" width=\"250\" height=\"210\"/>\n  <text data-shape-id=\"c2\" stroke=\"#0f766e\" fill=\"#0f766e\" stroke-width=\"1\" x=\"165\" y=\"105\" font-size=\"28\" font-family=\"sans-serif\">A</text>\n  <rect data-shape-id=\"c3\" stroke=\"#9a3412\" fill=\"#fff7ed\" stroke-width=\"2\" x=\"360\" y=\"70\" width=\"250\" height=\"210\"/>\n  <text data-shape-id=\"c4\" stroke=\"#9a3412\" fill=\"#9a3412\" stroke-width=\"1\" x=\"455\" y=\"105\" font-size=\"28\" font-family=\"sans-serif\">B</text>\n  <text data-shape-id=\"c5\" stroke=\"#374151\" fill=\"#374151\" stroke-width=\"1\" x=\"295\" y=\"190\" font-size=\"28\" font-family=\"sans-serif\">vs</text>\n</svg>",
+  "diagram": {
+    "version": 1,
+    "shapes": [
+      {
+        "id": "c1",
+        "type": "rect",
+        "x": 70,
+        "y": 70,
+        "width": 250,
+        "height": 210,
+        "stroke": "#0f766e",
+        "fill": "#ecfdf5",
+        "lineWidth": 2
+      },
+      {
+        "id": "c2",
+        "type": "text",
+        "x": 165,
+        "y": 105,
+        "text": "A",
+        "fontSize": 28,
+        "stroke": "#0f766e",
+        "fill": "#0f766e",
+        "lineWidth": 1
+      },
+      {
+        "id": "c3",
+        "type": "rect",
+        "x": 360,
+        "y": 70,
+        "width": 250,
+        "height": 210,
+        "stroke": "#9a3412",
+        "fill": "#fff7ed",
+        "lineWidth": 2
+      },
+      {
+        "id": "c4",
+        "type": "text",
+        "x": 455,
+        "y": 105,
+        "text": "B",
+        "fontSize": 28,
+        "stroke": "#9a3412",
+        "fill": "#9a3412",
+        "lineWidth": 1
+      },
+      {
+        "id": "c5",
+        "type": "text",
+        "x": 295,
+        "y": 190,
+        "text": "vs",
+        "fontSize": 28,
+        "stroke": "#374151",
+        "fill": "#374151",
+        "lineWidth": 1
+      }
+    ]
+  }
+}

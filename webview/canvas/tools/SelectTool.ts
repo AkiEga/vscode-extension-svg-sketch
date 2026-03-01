@@ -71,6 +71,10 @@ export class SelectTool implements Tool {
         shape.x = nx;
         shape.y = ny;
         break;
+      case "table":
+        shape.x = nx;
+        shape.y = ny;
+        break;
     }
   }
 
@@ -93,6 +97,8 @@ function getShapeOrigin(shape: Shape): Point {
     case "arrow":
       return { x: shape.x1, y: shape.y1 };
     case "text":
+      return { x: shape.x, y: shape.y };
+    case "table":
       return { x: shape.x, y: shape.y };
   }
 }

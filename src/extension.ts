@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
 import { DiagramPanel } from "./diagramPanel";
-import { parseDiagramData } from "./svgExporter";
+import { ensureTemplateStorageWithSeed } from "./fileUtils";
 
 export function activate(context: vscode.ExtensionContext) {
+  void ensureTemplateStorageWithSeed();
+
   // New diagram command
   context.subscriptions.push(
     vscode.commands.registerCommand("markdown-svg-sketch.newDiagram", () => {

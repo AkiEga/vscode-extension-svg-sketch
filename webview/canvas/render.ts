@@ -80,6 +80,10 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
       ctx.fillStyle = shape.stroke; // text rendered with stroke color
       ctx.fillText(shape.text, shape.x, shape.y);
       break;
+
+    case "table":
+      drawTable(ctx, shape);
+      break;
   }
 }
 
@@ -112,6 +116,59 @@ function drawArrow(
   ctx.fill();
 }
 
+function drawTable(ctx: CanvasRenderingContext2D, shape: import("../../src/types").TableShape): void {
+  const { x, y, width, height, rows, cols, cells, fontSize } = shape;
+  const colW = width / cols;
+  const rowH = height / rows;
+
+  // Fill background
+  if (shape.fill !== "none" && shape.fill !== "transparent") {
+    ctx.fillRect(x, y, width, height);
+  }
+
+  // Outer border
+  ctx.strokeRect(x, y, width, height);
+
+  // Header row background
+  ctx.save();
+  ctx.fillStyle = "#e5e7eb";
+  ctx.fillRect(x, y, width, rowH);
+  ctx.restore();
+
+  // Horizontal lines
+  for (let r = 1; r < rows; r++) {
+    ctx.beginPath();
+    ctx.moveTo(x, y + r * rowH);
+    ctx.lineTo(x + width, y + r * rowH);
+    ctx.stroke();
+  }
+
+  // Vertical lines
+  for (let c = 1; c < cols; c++) {
+    ctx.beginPath();
+    ctx.moveTo(x + c * colW, y);
+    ctx.lineTo(x + c * colW, y + height);
+    ctx.stroke();
+  }
+
+  // Cell text
+  ctx.save();
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.fillStyle = shape.stroke;
+  ctx.textBaseline = "middle";
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const text = cells[r]?.[c] ?? "";
+      if (text) {
+        const cellX = x + c * colW + 6;
+        const cellY = y + r * rowH + rowH / 2;
+        ctx.fillText(text, cellX, cellY, colW - 12);
+      }
+    }
+  }
+  ctx.restore();
+}
+
 function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Shape): void {
   ctx.save();
   ctx.strokeStyle = "#4a90d9";
@@ -140,6 +197,10 @@ function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Shape): vo
       x = shape.x - 4; y = shape.y - shape.fontSize - 4;
       w = shape.text.length * shape.fontSize * 0.6 + 8;
       h = shape.fontSize + 8;
+      break;
+    case "table":
+      x = shape.x - 4; y = shape.y - 4;
+      w = shape.width + 8; h = shape.height + 8;
       break;
   }
 

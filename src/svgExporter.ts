@@ -43,6 +43,9 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
           `  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="sans-serif">${escapeXml(shape.text)}</text>`
         );
         break;
+      case "table":
+        lines.push(...renderTableSvg(shape, common));
+        break;
     }
   }
 
@@ -61,6 +64,38 @@ export function parseDiagramData(svgContent: string): DiagramData | undefined {
   } catch {
     return undefined;
   }
+}
+
+function renderTableSvg(shape: import("./types").TableShape, common: string): string[] {
+  const { x, y, width, height, rows, cols, cells, fontSize } = shape;
+  const colW = width / cols;
+  const rowH = height / rows;
+  const lines: string[] = [];
+  lines.push(`  <g ${common} data-table-rows="${rows}" data-table-cols="${cols}">`);
+  // Background
+  lines.push(`    <rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${shape.fill}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
+  // Header background
+  lines.push(`    <rect x="${x}" y="${y}" width="${width}" height="${rowH}" fill="#e5e7eb" stroke="none"/>`);
+  // Grid lines
+  for (let r = 1; r < rows; r++) {
+    lines.push(`    <line x1="${x}" y1="${y + r * rowH}" x2="${x + width}" y2="${y + r * rowH}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
+  }
+  for (let c = 1; c < cols; c++) {
+    lines.push(`    <line x1="${x + c * colW}" y1="${y}" x2="${x + c * colW}" y2="${y + height}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
+  }
+  // Cell text
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const text = cells[r]?.[c];
+      if (text) {
+        const tx = x + c * colW + 6;
+        const ty = y + r * rowH + rowH / 2;
+        lines.push(`    <text x="${tx}" y="${ty}" font-size="${fontSize}" font-family="sans-serif" fill="${shape.stroke}" dominant-baseline="central">${escapeXml(text)}</text>`);
+      }
+    }
+  }
+  lines.push("  </g>");
+  return lines;
 }
 
 function escapeXml(text: string): string {

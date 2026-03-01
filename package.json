@@ -51,6 +51,11 @@
           "type": "string",
           "default": "diagram",
           "description": "Prefix for generated SVG file names"
+        },
+        "markdown-svg-sketch.templateDir": {
+          "type": "string",
+          "default": ".markdown-svg-sketch/templates",
+          "description": "Directory to store diagram templates (relative to workspace root)"
         }
       }
     }

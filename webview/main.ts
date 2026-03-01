@@ -1,5 +1,12 @@
 import { CanvasEditor } from "./canvas/CanvasEditor";
-import type { ToolType, DiagramData, Shape } from "./shared";
+import type {
+  ToolType,
+  DiagramData,
+  Shape,
+  DiagramTemplateSummary,
+  WebviewToExtMessage,
+  ExtToWebviewMessage,
+} from "./shared";
 
 // VS Code webview API
 declare function acquireVsCodeApi(): {
@@ -10,12 +17,60 @@ declare function acquireVsCodeApi(): {
 
 const vscode = acquireVsCodeApi();
 
+function postMessage(msg: WebviewToExtMessage): void {
+  vscode.postMessage(msg);
+}
+
+interface WebviewState {
+  shapes: Shape[];
+}
+
+function saveState(shapes: Shape[]): void {
+  vscode.setState({ shapes } satisfies WebviewState);
+}
+
+function restoreState(): Shape[] | undefined {
+  const state = vscode.getState() as WebviewState | undefined;
+  return state?.shapes;
+}
+
 // Initialize canvas editor
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const editor = new CanvasEditor(canvas);
 
+// Restore canvas from persisted state (supports webview hide/show without retainContextWhenHidden)
+const restored = restoreState();
+if (restored) {
+  editor.setShapes(restored);
+}
+
+// Persist canvas state on every mutation
+editor.setOnChange(() => saveState(editor.getShapes()));
+
+// --- Table editing toolbar ---
+const tableToolbar = document.getElementById("table-toolbar") as HTMLElement;
+editor.setOnSelectionChange((id) => {
+  if (!id) {
+    tableToolbar.style.display = "none";
+    return;
+  }
+  const shape = editor.getSelectedShape();
+  tableToolbar.style.display = shape?.type === "table" ? "flex" : "none";
+});
+
+document.getElementById("btn-add-row")!.addEventListener("click", () => editor.addTableRow());
+document.getElementById("btn-del-row")!.addEventListener("click", () => editor.deleteTableRow());
+document.getElementById("btn-add-col")!.addEventListener("click", () => editor.addTableColumn());
+document.getElementById("btn-del-col")!.addEventListener("click", () => editor.deleteTableColumn());
+
 // --- Toolbar bindings ---
 const toolButtons = document.querySelectorAll<HTMLButtonElement>("#toolbar button[data-tool]");
+
+// Sync toolbar when editor auto-switches tool (e.g. after shape creation)
+editor.setOnToolChange((tool) => {
+  toolButtons.forEach((b) => b.classList.remove("active"));
+  document.querySelector<HTMLButtonElement>(`button[data-tool="${tool}"]`)?.classList.add("active");
+});
 toolButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     toolButtons.forEach((b) => b.classList.remove("active"));
@@ -28,7 +83,7 @@ toolButtons.forEach((btn) => {
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement) { return; }
   const keyMap: Record<string, ToolType> = {
-    v: "select", r: "rect", e: "ellipse", a: "arrow", t: "text",
+    v: "select", r: "rect", e: "ellipse", a: "arrow", t: "text", g: "table",
   };
   const tool = keyMap[e.key.toLowerCase()];
   if (tool) {
@@ -56,31 +111,116 @@ document.getElementById("btn-save")!.addEventListener("click", () => {
   const shapes = editor.getShapes();
   const { width, height } = editor.getCanvasSize();
   const svgContent = shapesToSvgString(shapes, width, height);
-  vscode.postMessage({ command: "save", svgContent });
+  postMessage({ command: "save", svgContent });
+});
+
+const templateNameInput = document.getElementById("template-name") as HTMLInputElement;
+const templatePanel = document.getElementById("template-panel") as HTMLElement;
+const templateList = document.getElementById("template-list") as HTMLElement;
+const btnSaveTemplate = document.getElementById("btn-save-template") as HTMLButtonElement;
+const btnToggleTemplates = document.getElementById("btn-toggle-templates") as HTMLButtonElement;
+
+let templates: DiagramTemplateSummary[] = [];
+
+btnSaveTemplate.addEventListener("click", () => {
+  const name = templateNameInput.value.trim();
+  const shapes = editor.getShapes();
+  if (!name || shapes.length === 0) {
+    return;
+  }
+  postMessage({ command: "saveTemplate", name, shapes });
+});
+
+btnToggleTemplates.addEventListener("click", () => {
+  templatePanel.classList.toggle("open");
+  if (templatePanel.classList.contains("open")) {
+    postMessage({ command: "listTemplates" });
+  }
 });
 
 // --- Extension messages ---
 window.addEventListener("message", (event) => {
-  const msg = event.data;
+  const msg = event.data as ExtToWebviewMessage;
   switch (msg.command) {
     case "init":
       if (msg.svgContent) {
         const data = parseDiagramJson(msg.svgContent);
         if (data) {
           editor.setShapes(data.shapes);
+          saveState(data.shapes);
         }
       } else {
         editor.setShapes([]);
+        saveState([]);
       }
       break;
     case "load":
       editor.setShapes(msg.shapes);
+      saveState(msg.shapes);
+      break;
+    case "templatesList":
+      templates = msg.templates;
+      renderTemplateList(templates);
+      break;
+    case "templatePayload":
+      editor.insertShapes(msg.shapes);
+      saveState(editor.getShapes());
+      break;
+    case "templateSaved":
+      templateNameInput.value = "";
+      break;
+    case "templateDeleted":
+      templates = templates.filter((t) => t.id !== msg.templateId);
+      renderTemplateList(templates);
+      break;
+    case "error":
+      console.warn("Template error:", msg.message);
       break;
   }
 });
 
 // Notify extension we're ready
-vscode.postMessage({ command: "ready" });
+postMessage({ command: "ready" });
+
+function renderTemplateList(items: DiagramTemplateSummary[]): void {
+  if (items.length === 0) {
+    templateList.innerHTML = `<div class="template-meta">No templates yet.</div>`;
+    return;
+  }
+
+  const cards: string[] = [];
+  for (const item of items) {
+    const previewSrc = `data:image/svg+xml;utf8,${encodeURIComponent(item.thumbnailSvg)}`;
+    cards.push(
+      `<article class="template-item" data-id="${item.id}">`,
+      `  <div class="template-title">${escapeHtml(item.name)}</div>`,
+      `  <div class="template-meta">${item.shapeCount} shapes</div>`,
+      `  <img class="template-preview" src="${previewSrc}" alt="${escapeHtml(item.name)} preview">`,
+      "  <div class=\"template-actions\">",
+      `    <button data-action="insert" data-id="${item.id}">Insert</button>`,
+      `    <button data-action="delete" data-id="${item.id}">Delete</button>`,
+      "  </div>",
+      "</article>",
+    );
+  }
+  templateList.innerHTML = cards.join("\n");
+
+  for (const btn of templateList.querySelectorAll<HTMLButtonElement>("button[data-action]")) {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      const action = btn.dataset.action;
+      if (!id || !action) {
+        return;
+      }
+      if (action === "insert") {
+        postMessage({ command: "applyTemplate", templateId: id });
+      }
+      if (action === "delete") {
+        postMessage({ command: "deleteTemplate", templateId: id });
+      }
+    });
+  }
+}
 
 // --- SVG generation (client-side for save) ---
 function shapesToSvgString(shapes: Shape[], width: number, height: number): string {
@@ -118,6 +258,31 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
         lines.push(`  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="sans-serif">${escaped}</text>`);
         break;
       }
+      case "table": {
+        const { x: tx, y: ty, width: tw, height: th, rows, cols, cells, fontSize } = shape;
+        const colW = tw / cols;
+        const rowH = th / rows;
+        lines.push(`  <g ${common} data-table-rows="${rows}" data-table-cols="${cols}">`);
+        lines.push(`    <rect x="${tx}" y="${ty}" width="${tw}" height="${th}" fill="${shape.fill}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
+        lines.push(`    <rect x="${tx}" y="${ty}" width="${tw}" height="${rowH}" fill="#e5e7eb" stroke="none"/>`);
+        for (let r = 1; r < rows; r++) {
+          lines.push(`    <line x1="${tx}" y1="${ty + r * rowH}" x2="${tx + tw}" y2="${ty + r * rowH}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
+        }
+        for (let c = 1; c < cols; c++) {
+          lines.push(`    <line x1="${tx + c * colW}" y1="${ty}" x2="${tx + c * colW}" y2="${ty + th}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
+        }
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const t = cells[r]?.[c];
+            if (t) {
+              const esc = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+              lines.push(`    <text x="${tx + c * colW + 6}" y="${ty + r * rowH + rowH / 2}" font-size="${fontSize}" font-family="sans-serif" fill="${shape.stroke}" dominant-baseline="central">${esc}</text>`);
+            }
+          }
+        }
+        lines.push("  </g>");
+        break;
+      }
     }
   }
 
@@ -134,4 +299,13 @@ function parseDiagramJson(svgContent: string): DiagramData | undefined {
   } catch {
     return undefined;
   }
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }

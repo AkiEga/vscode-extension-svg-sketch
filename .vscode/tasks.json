@@ -3,13 +3,13 @@
   "tasks": [
     {
       "label": "npm: develop build",
-      "type": "npm",
-      "script": "build",
+      "type": "shell",
+      "command": "node",
+      "args": ["esbuild.mjs", "--development"],
       "group": {
         "kind": "build",
         "isDefault": true
       },
-
       "options": {
         "cwd": "${workspaceFolder}",
         "env": {

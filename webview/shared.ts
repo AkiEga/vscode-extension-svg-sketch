@@ -1,7 +1,23 @@
-import type { Shape, ShapeType, ToolType, DiagramData } from "../src/types";
+import type {
+  Shape,
+  ShapeType,
+  ToolType,
+  DiagramData,
+  DiagramTemplateSummary,
+  WebviewToExtMessage,
+  ExtToWebviewMessage,
+} from "../src/types";
 
 // Re-export types for webview modules
-export type { Shape, ShapeType, ToolType, DiagramData };
+export type {
+  Shape,
+  ShapeType,
+  ToolType,
+  DiagramData,
+  DiagramTemplateSummary,
+  WebviewToExtMessage,
+  ExtToWebviewMessage,
+};
 
 export interface Point {
   x: number;
@@ -47,6 +63,13 @@ export function hitTest(shape: Shape, pt: Point, tolerance = 6): boolean {
         pt.x <= shape.x + shape.text.length * shape.fontSize * 0.6 + tolerance &&
         pt.y >= shape.y - shape.fontSize - tolerance &&
         pt.y <= shape.y + tolerance
+      );
+    case "table":
+      return (
+        pt.x >= shape.x - tolerance &&
+        pt.x <= shape.x + shape.width + tolerance &&
+        pt.y >= shape.y - tolerance &&
+        pt.y <= shape.y + shape.height + tolerance
       );
   }
 }

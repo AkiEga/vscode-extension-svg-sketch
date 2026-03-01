@@ -1,7 +1,14 @@
 import * as vscode from "vscode";
-import type { WebviewToExtMessage, ExtToWebviewMessage, Shape } from "./types";
-import { shapesToSvg, parseDiagramData } from "./svgExporter";
-import { resolveNewSvgPath, saveSvgFile, insertMarkdownLink } from "./fileUtils";
+import type { WebviewToExtMessage, ExtToWebviewMessage } from "./types";
+import {
+  resolveNewSvgPath,
+  saveSvgFile,
+  insertMarkdownLink,
+  listTemplates,
+  saveTemplate,
+  loadTemplate,
+  deleteTemplate,
+} from "./fileUtils";
 
 export class DiagramPanel {
   public static readonly viewType = "markdownSvgSketch.editor";
@@ -22,13 +29,18 @@ export class DiagramPanel {
     this.extensionUri = extensionUri;
     this.mdEditor = mdEditor;
 
-    this.panel.webview.html = this.getHtmlContent();
     this.panel.webview.onDidReceiveMessage(
       (msg) => this.onMessage(msg),
       undefined,
       this.disposables,
     );
     this.panel.onDidDispose(() => this.dispose(), undefined, this.disposables);
+
+    // Defer HTML injection so VS Code's internal webview ServiceWorker
+    // initialisation completes before the document is replaced.
+    setTimeout(() => {
+      this.panel.webview.html = this.getHtmlContent();
+    }, 0);
   }
 
   /** Create or reveal the diagram panel for a new diagram */
@@ -50,7 +62,6 @@ export class DiagramPanel {
       vscode.ViewColumn.Beside,
       {
         enableScripts: true,
-        retainContextWhenHidden: true,
         localResourceRoots: [vscode.Uri.joinPath(extensionUri, "out")],
       },
     );
@@ -81,8 +92,51 @@ export class DiagramPanel {
         await this.handleSave(msg.svgContent);
         break;
       case "ready":
+        await this.postTemplatesList();
         break;
+      case "listTemplates":
+        await this.postTemplatesList();
+        break;
+      case "saveTemplate": {
+        const saved = await saveTemplate(msg.name, msg.shapes);
+        if (!saved) {
+          this.postMessage({ command: "error", message: "Template name and shapes are required." });
+          return;
+        }
+        this.postMessage({ command: "templateSaved", template: saved });
+        await this.postTemplatesList();
+        break;
+      }
+      case "applyTemplate": {
+        const template = await loadTemplate(msg.templateId);
+        if (!template) {
+          this.postMessage({ command: "error", message: "Template not found." });
+          return;
+        }
+        this.postMessage({
+          command: "templatePayload",
+          templateId: template.id,
+          name: template.name,
+          shapes: template.diagram.shapes,
+        });
+        break;
+      }
+      case "deleteTemplate": {
+        const ok = await deleteTemplate(msg.templateId);
+        if (!ok) {
+          this.postMessage({ command: "error", message: "Failed to delete template." });
+          return;
+        }
+        this.postMessage({ command: "templateDeleted", templateId: msg.templateId });
+        await this.postTemplatesList();
+        break;
+      }
     }
+  }
+
+  private async postTemplatesList(): Promise<void> {
+    const templates = await listTemplates();
+    this.postMessage({ command: "templatesList", templates });
   }
 
   private async handleSave(svgContent: string): Promise<void> {
@@ -124,13 +178,14 @@ export class DiagramPanel {
       vscode.Uri.joinPath(this.extensionUri, "out", "webview.js"),
     );
     const nonce = getNonce();
+    const cspSource = this.panel.webview.cspSource;
 
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline';">
+    content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src ${cspSource} data:; worker-src ${cspSource};">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SVG Sketch</title>
   <style>
@@ -164,6 +219,67 @@ export class DiagramPanel {
     #canvas-container { flex: 1; overflow: hidden; position: relative; }
     #canvas { display: block; background: #ffffff; cursor: crosshair; }
     #canvas.tool-select { cursor: default; }
+
+    #template-panel {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 280px;
+      max-height: calc(100% - 24px);
+      overflow: auto;
+      background: var(--vscode-editorWidget-background);
+      border: 1px solid var(--vscode-widget-border);
+      border-radius: 6px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+      padding: 8px;
+      display: none;
+      z-index: 20;
+    }
+    #template-panel.open { display: block; }
+    #template-panel h3 { font-size: 12px; margin-bottom: 8px; }
+    #template-list { display: grid; gap: 8px; }
+    .template-item {
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      padding: 6px;
+      display: grid;
+      gap: 6px;
+      background: var(--vscode-sideBar-background);
+    }
+    .template-title { font-size: 12px; font-weight: 600; }
+    .template-meta { font-size: 11px; opacity: 0.8; }
+    .template-preview {
+      width: 100%;
+      height: 80px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background: #fff;
+      object-fit: contain;
+    }
+    .template-actions { display: flex; gap: 6px; }
+    .template-actions button { flex: 1; }
+    #template-name {
+      width: 160px;
+      padding: 2px 4px;
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border);
+    }
+    #table-toolbar {
+      display: none; gap: 4px; padding: 4px 8px;
+      background: var(--vscode-sideBar-background);
+      border-bottom: 1px solid var(--vscode-panel-border);
+      align-items: center; font-size: 12px;
+    }
+    #table-toolbar span { opacity: 0.8; }
+    #table-toolbar button {
+      padding: 3px 8px; cursor: pointer;
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: 1px solid var(--vscode-button-border, transparent);
+      border-radius: 3px; font-size: 12px;
+    }
+    #table-toolbar button:hover { background: var(--vscode-button-secondaryHoverBackground); }
   </style>
 </head>
 <body>
@@ -173,6 +289,7 @@ export class DiagramPanel {
     <button data-tool="ellipse" title="Ellipse (E)">◯ Ellipse</button>
     <button data-tool="arrow" title="Arrow (A)">→ Arrow</button>
     <button data-tool="text" title="Text (T)">T Text</button>
+    <button data-tool="table" title="Table (G)">⊞ Table</button>
     <div class="separator"></div>
     <label>Stroke</label><input type="color" id="stroke-color" value="#000000">
     <label>Fill</label><input type="color" id="fill-color" value="#ffffff">
@@ -182,10 +299,25 @@ export class DiagramPanel {
     <button id="btn-redo" title="Redo (Ctrl+Y)">↷ Redo</button>
     <button id="btn-delete" title="Delete selected (Del)">🗑 Delete</button>
     <div class="separator"></div>
+    <input id="template-name" type="text" placeholder="Template name">
+    <button id="btn-save-template" title="Save current diagram as template">Save Template</button>
+    <button id="btn-toggle-templates" title="Show templates">Templates</button>
+    <div class="separator"></div>
     <button id="btn-save" title="Save SVG">💾 Save</button>
+  </div>
+  <div id="table-toolbar">
+    <span>Table:</span>
+    <button id="btn-add-row" title="Add row">+ Row</button>
+    <button id="btn-del-row" title="Delete row">- Row</button>
+    <button id="btn-add-col" title="Add column">+ Col</button>
+    <button id="btn-del-col" title="Delete column">- Col</button>
   </div>
   <div id="canvas-container">
     <canvas id="canvas"></canvas>
+    <aside id="template-panel" aria-label="Template panel">
+      <h3>Presentation Templates</h3>
+      <div id="template-list"></div>
+    </aside>
   </div>
   <script nonce="${nonce}" src="${webviewUri}"></script>
 </body>
