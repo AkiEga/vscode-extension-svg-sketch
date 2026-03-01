@@ -1,9 +1,6 @@
 import * as vscode from "vscode";
 import type { WebviewToExtMessage, ExtToWebviewMessage } from "./types";
 import {
-  resolveNewSvgPath,
-  saveSvgFile,
-  insertMarkdownLink,
   listTemplates,
   saveTemplate,
   loadTemplate,
