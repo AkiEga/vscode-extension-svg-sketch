@@ -1,9 +1,19 @@
 import * as vscode from "vscode";
 import { DiagramPanel } from "./diagramPanel";
+import { SvgEditorProvider } from "./svgEditorProvider";
 import { ensureTemplateStorageWithSeed } from "./fileUtils";
 
 export function activate(context: vscode.ExtensionContext) {
   void ensureTemplateStorageWithSeed();
+
+  // Custom editor for .svg files
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(
+      SvgEditorProvider.viewType,
+      new SvgEditorProvider(context.extensionUri),
+      { supportsMultipleEditorsPerDocument: false },
+    ),
+  );
 
   // New diagram command
   context.subscriptions.push(

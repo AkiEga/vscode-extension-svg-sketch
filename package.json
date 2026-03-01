@@ -58,7 +58,19 @@
           "description": "Directory to store diagram templates (relative to workspace root)"
         }
       }
-    }
+    },
+    "customEditors": [
+      {
+        "viewType": "markdownSvgSketch.svgEditor",
+        "displayName": "SVG Sketch Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.svg"
+          }
+        ],
+        "priority": "option"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
