@@ -1,54 +1,60 @@
-# Markdown SVG Sketch
+# SVG Sketch
 
-VS Code 上で Markdown 執筆中にシンプルな図形エディタを使って SVG 図を作成できる拡張機能です。
+English | [日本語](./README.ja.md)
 
-## 機能
+SVG Sketch is a VS Code extension that lets you create and edit SVG diagrams with a canvas-based editor.
 
-- **WebView ベースの図形エディタ** — サイドパネルで直感的に作図
-- **5つの描画ツール** — 四角形、楕円、矢印、テキスト、選択/移動
-- **SVG として保存** — `.svg` ファイルとして保存し、Markdown にリンクを自動挿入
-- **既存 SVG の再編集** — 保存した SVG をエディタで再度開いて編集可能
-- **Undo/Redo** — Ctrl+Z / Ctrl+Y で操作を取り消し・やり直し
+## Features
 
-## 使い方
+- Canvas-based custom editor for `.svg` files
+- 6 drawing tools: Select, Rectangle, Ellipse, Arrow, Text, Table
+- Save/overwrite SVG directly from the editor
+- Re-edit existing SVG files (diagram data is embedded in `data-diagram`)
+- Undo/Redo and keyboard shortcuts
+- Diagram template save/insert/delete workflow
 
-### 新しい図を作成
+## Usage
 
-1. Markdown ファイルを開いた状態で、右クリック → **Markdown SVG Sketch: New Diagram**
-2. サイドパネルに図形エディタが表示される
-3. ツールバーで描画ツールを選択し、キャンバス上で図形を配置
-4. **💾 Save** ボタンで SVG を保存 → Markdown にリンクが自動挿入
+### Create a new SVG
 
-### 既存の SVG を編集
+1. Open the Command Palette.
+2. Run `SVG Sketch: New SVG`.
+3. Draw on the canvas with the toolbar tools.
+4. Click `Save` to write the SVG content.
 
-- エクスプローラーで `.svg` ファイルを右クリック → **Markdown SVG Sketch: Edit SVG**
+### Edit an existing SVG
 
-### キーボードショートカット
+- Open a `.svg` file in VS Code.
+- It is opened with the `SVG Sketch Editor` custom editor (default for `*.svg`).
 
-| キー | ツール |
-|------|--------|
-| `V`  | 選択   |
-| `R`  | 四角形 |
-| `E`  | 楕円   |
-| `A`  | 矢印   |
-| `T`  | テキスト |
-| `Delete` | 選択中の図形を削除 |
+### Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `V` | Select tool |
+| `R` | Rectangle tool |
+| `E` | Ellipse tool |
+| `A` | Arrow tool |
+| `T` | Text tool |
+| `G` | Table tool |
+| `Delete` / `Backspace` | Delete selected shape |
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y` | Redo |
 
-## 設定
+## Settings
 
-| 設定 | 説明 | デフォルト |
-|------|------|-----------|
-| `svg-sketch.imgDir` | SVG 保存先ディレクトリ (Markdown ファイルからの相対パス) | `img` |
-| `svg-sketch.filePrefix` | SVG ファイル名のプレフィックス | `diagram` |
+| Setting | Description | Default |
+|---|---|---|
+| `svg-sketch.templateDir` | Directory for stored diagram templates (relative to workspace root) | `.svg-sketch/templates` |
 
-## 開発
+## Development
 
 ```bash
 npm install
-npm run watch   # 開発時 (自動リビルド)
-npm run build   # 本番ビルド
+node esbuild.mjs --development
+node esbuild.mjs --watch
+node esbuild.mjs --production
+npx vitest run
 ```
 
 ## License
