@@ -65,6 +65,66 @@ function boundsIntersect(a: Bounds, b: Bounds): boolean {
   return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
 }
 
+function pointInBounds(p: Point, b: Bounds): boolean {
+  return p.x >= b.minX && p.x <= b.maxX && p.y >= b.minY && p.y <= b.maxY;
+}
+
+function orientation(a: Point, b: Point, c: Point): number {
+  const v = (b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y);
+  if (Math.abs(v) < 1e-9) { return 0; }
+  return v > 0 ? 1 : 2;
+}
+
+function onSegment(a: Point, b: Point, c: Point): boolean {
+  return (
+    b.x <= Math.max(a.x, c.x) &&
+    b.x >= Math.min(a.x, c.x) &&
+    b.y <= Math.max(a.y, c.y) &&
+    b.y >= Math.min(a.y, c.y)
+  );
+}
+
+function segmentsIntersect(a1: Point, a2: Point, b1: Point, b2: Point): boolean {
+  const o1 = orientation(a1, a2, b1);
+  const o2 = orientation(a1, a2, b2);
+  const o3 = orientation(b1, b2, a1);
+  const o4 = orientation(b1, b2, a2);
+
+  if (o1 !== o2 && o3 !== o4) { return true; }
+  if (o1 === 0 && onSegment(a1, b1, a2)) { return true; }
+  if (o2 === 0 && onSegment(a1, b2, a2)) { return true; }
+  if (o3 === 0 && onSegment(b1, a1, b2)) { return true; }
+  if (o4 === 0 && onSegment(b1, a2, b2)) { return true; }
+  return false;
+}
+
+function segmentIntersectsBounds(p1: Point, p2: Point, b: Bounds): boolean {
+  if (pointInBounds(p1, b) || pointInBounds(p2, b)) {
+    return true;
+  }
+
+  const tl = { x: b.minX, y: b.minY };
+  const tr = { x: b.maxX, y: b.minY };
+  const bl = { x: b.minX, y: b.maxY };
+  const br = { x: b.maxX, y: b.maxY };
+
+  return (
+    segmentsIntersect(p1, p2, tl, tr) ||
+    segmentsIntersect(p1, p2, tr, br) ||
+    segmentsIntersect(p1, p2, br, bl) ||
+    segmentsIntersect(p1, p2, bl, tl)
+  );
+}
+
+function expandBounds(b: Bounds, padding: number): Bounds {
+  return {
+    minX: b.minX - padding,
+    minY: b.minY - padding,
+    maxX: b.maxX + padding,
+    maxY: b.maxY + padding,
+  };
+}
+
 /** Normalize two points into an axis-aligned bounding box */
 function rectFromPoints(a: Point, b: Point): Bounds {
   return {
@@ -282,6 +342,18 @@ export class SelectTool implements Tool {
       const hasArea = (rect.maxX - rect.minX) > 2 || (rect.maxY - rect.minY) > 2;
       if (hasArea) {
         for (const s of this.shapes) {
+          if (s instanceof ArrowShape) {
+            const padded = expandBounds(rect, Math.max(4, s.lineWidth / 2));
+            const intersects = segmentIntersectsBounds(
+              { x: s.x1, y: s.y1 },
+              { x: s.x2, y: s.y2 },
+              padded,
+            );
+            if (intersects) {
+              this._selectedIds.add(s.id);
+            }
+            continue;
+          }
           if (boundsIntersect(s.getBounds(), rect)) {
             this._selectedIds.add(s.id);
           }

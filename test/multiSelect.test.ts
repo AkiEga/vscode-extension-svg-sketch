@@ -175,6 +175,37 @@ describe("SelectTool – rubber-band marquee selection", () => {
 
     expect(tool.getRubberband()).toBeUndefined();
   });
+
+  it("arrow は矩形内でも線に交差しない場合は範囲選択されない", () => {
+    const arrow = new ArrowShape({
+      id: "a1", x1: 100, y1: 100, x2: 300, y2: 300,
+      stroke: "#000", fill: "none", lineWidth: 2,
+    });
+    shapes = [arrow];
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => {});
+
+    // This marquee is inside arrow bounding box but away from the diagonal segment.
+    tool.onMouseDown({ x: 260, y: 120 }, style);
+    tool.onMouseMove({ x: 290, y: 150 });
+    tool.onMouseUp({ x: 290, y: 150 });
+
+    expect(selectedIds.has("a1")).toBe(false);
+  });
+
+  it("arrow は線に交差するドラッグ範囲で選択される", () => {
+    const arrow = new ArrowShape({
+      id: "a1", x1: 100, y1: 100, x2: 300, y2: 300,
+      stroke: "#000", fill: "none", lineWidth: 2,
+    });
+    shapes = [arrow];
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => {});
+
+    tool.onMouseDown({ x: 180, y: 180 }, style);
+    tool.onMouseMove({ x: 220, y: 220 });
+    tool.onMouseUp({ x: 220, y: 220 });
+
+    expect(selectedIds.has("a1")).toBe(true);
+  });
 });
 
 describe("SelectTool – multi-select body move", () => {

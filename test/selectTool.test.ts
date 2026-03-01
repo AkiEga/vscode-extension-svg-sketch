@@ -272,6 +272,33 @@ describe("SelectTool – handle resize", () => {
     expect(bubble.height).toBeGreaterThan(0);
   });
 
+  it("bubble を通常ドラッグ移動しても消失しない", () => {
+    const bubble = new BubbleShape({
+      id: "b1", x: 120, y: 120, width: 120, height: 80,
+      stroke: "#000", fill: "#fff", lineWidth: 2,
+    });
+    shapes = [bubble];
+    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
+
+    // select bubble
+    tool.onMouseDown({ x: 160, y: 150 }, style);
+    tool.onMouseUp({ x: 160, y: 150 });
+
+    // body drag
+    tool.onMouseDown({ x: 160, y: 150 }, style);
+    tool.onMouseMove({ x: 200, y: 190 });
+    tool.onMouseUp({ x: 200, y: 190 });
+
+    expect(Number.isFinite(bubble.x)).toBe(true);
+    expect(Number.isFinite(bubble.y)).toBe(true);
+    expect(Number.isFinite(bubble.width)).toBe(true);
+    expect(Number.isFinite(bubble.height)).toBe(true);
+    expect(bubble.width).toBe(120);
+    expect(bubble.height).toBe(80);
+    expect(bubble.x).toBe(160);
+    expect(bubble.y).toBe(160);
+  });
+
   it("ドラッグ中に onUndoPush が1回だけ呼ばれる", () => {
     const rect = makeRect("r1", 100, 100, 200, 100);
     shapes = [rect];

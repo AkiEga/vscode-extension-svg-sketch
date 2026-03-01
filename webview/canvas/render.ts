@@ -250,6 +250,28 @@ function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Shape): vo
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 3]);
 
+  if (shape instanceof ArrowShape) {
+    // Arrow selection uses line-based highlight rather than bounding rectangle.
+    ctx.beginPath();
+    ctx.moveTo(shape.x1, shape.y1);
+    ctx.lineTo(shape.x2, shape.y2);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#d94a4a";
+    const endpoints = [
+      { x: shape.x1, y: shape.y1 },
+      { x: shape.x2, y: shape.y2 },
+    ];
+    for (const ep of endpoints) {
+      ctx.beginPath();
+      ctx.arc(ep.x, ep.y, HANDLE_SIZE, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    return;
+  }
+
   const h = getShapeHandles(shape);
   const x = h.tl.x, y = h.tl.y;
   const w = h.tr.x - h.tl.x, hh = h.bl.y - h.tl.y;
@@ -262,20 +284,6 @@ function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Shape): vo
   const corners = [h.tl, h.tr, h.bl, h.br];
   for (const c of corners) {
     ctx.fillRect(c.x - HANDLE_SIZE / 2, c.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
-  }
-
-  // For arrows, also draw endpoint handles
-  if (shape instanceof ArrowShape) {
-    ctx.fillStyle = "#d94a4a";
-    const endpoints = [
-      { x: shape.x1, y: shape.y1 },
-      { x: shape.x2, y: shape.y2 },
-    ];
-    for (const ep of endpoints) {
-      ctx.beginPath();
-      ctx.arc(ep.x, ep.y, HANDLE_SIZE, 0, Math.PI * 2);
-      ctx.fill();
-    }
   }
 
   ctx.restore();
