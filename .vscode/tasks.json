@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "npm: develop build",
+      "type": "npm",
+      "script": "build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "NODE_ENV": "development"
+        }
+      },
+      "detail": "node esbuild.mjs --development"
+    },
+    {
+      "type": "npm",
+      "script": "watch",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "label": "npm: watch",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "NODE_ENV": "development"
+        }
+      },
+      "detail": "node esbuild.mjs --watch"
+    }
+  ]
+}

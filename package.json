@@ -1,0 +1,77 @@
+{
+  "name": "markdown-svg-sketch",
+  "displayName": "Markdown SVG Sketch",
+  "description": "A simple shape editor for creating SVG diagrams while writing Markdown in VS Code",
+  "version": "0.0.1",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.86.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "markdown-svg-sketch.newDiagram",
+        "title": "Markdown SVG Sketch: New Diagram"
+      },
+      {
+        "command": "markdown-svg-sketch.editSvg",
+        "title": "Markdown SVG Sketch: Edit SVG"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "markdown-svg-sketch.newDiagram",
+          "when": "editorTextFocus && resourceExtname == .md",
+          "group": "markdown-svg-sketch"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "markdown-svg-sketch.editSvg",
+          "when": "resourceExtname == .svg",
+          "group": "markdown-svg-sketch"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Markdown SVG Sketch",
+      "properties": {
+        "markdown-svg-sketch.imgDir": {
+          "type": "string",
+          "default": "img",
+          "description": "Directory to save SVG files (relative to the Markdown file)"
+        },
+        "markdown-svg-sketch.filePrefix": {
+          "type": "string",
+          "default": "diagram",
+          "description": "Prefix for generated SVG file names"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.mjs --production",
+    "watch": "node esbuild.mjs --watch",
+    "compile": "tsc -p ./",
+    "lint": "eslint src/ webview/ --ext ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.86.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.18"
+  }
+}

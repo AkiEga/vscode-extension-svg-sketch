@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="889" viewBox="0 0 980 889"
+  data-editor="markdown-svg-sketch"
+  data-diagram='{"version":1,"shapes":[{"id":"s12","type":"rect","x":17,"y":110.66666412353516,"width":143,"height":132,"stroke":"#000000","fill":"#ffffff","lineWidth":2},{"id":"s14","type":"rect","x":110,"y":172.66666412353516,"width":0,"height":0,"stroke":"#000000","fill":"#ffffff","lineWidth":2},{"id":"s16","type":"rect","x":110,"y":172.66666412353516,"width":0,"height":0,"stroke":"#000000","fill":"#ffffff","lineWidth":2},{"id":"s18","type":"rect","x":68,"y":150.66666412353516,"width":0,"height":0,"stroke":"#000000","fill":"#ffffff","lineWidth":2},{"id":"s20","type":"rect","x":60,"y":173.66666412353516,"width":0,"height":0,"stroke":"#000000","fill":"#ffffff","lineWidth":2},{"id":"s32","type":"arrow","x1":190,"y1":180,"x2":410,"y2":195,"stroke":"#000000","fill":"none","lineWidth":2},{"id":"s34","type":"arrow","x1":350,"y1":135,"x2":350,"y2":135,"stroke":"#000000","fill":"none","lineWidth":2},{"id":"s44","type":"ellipse","cx":224,"cy":108.5,"rx":61,"ry":40.5,"stroke":"#000000","fill":"#ffffff","lineWidth":2},{"id":"s1","type":"text","x":411,"y":122,"text":"test","fontSize":16,"stroke":"#000000","fill":"#000000","lineWidth":2},{"id":"s2","type":"text","x":221,"y":267,"text":"hoge","fontSize":16,"stroke":"#000000","fill":"#000000","lineWidth":2}]}'>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect data-shape-id="s12" stroke="#000000" fill="#ffffff" stroke-width="2" x="17" y="110.66666412353516" width="143" height="132"/>
+  <rect data-shape-id="s14" stroke="#000000" fill="#ffffff" stroke-width="2" x="110" y="172.66666412353516" width="0" height="0"/>
+  <rect data-shape-id="s16" stroke="#000000" fill="#ffffff" stroke-width="2" x="110" y="172.66666412353516" width="0" height="0"/>
+  <rect data-shape-id="s18" stroke="#000000" fill="#ffffff" stroke-width="2" x="68" y="150.66666412353516" width="0" height="0"/>
+  <rect data-shape-id="s20" stroke="#000000" fill="#ffffff" stroke-width="2" x="60" y="173.66666412353516" width="0" height="0"/>
+  <line data-shape-id="s32" stroke="#000000" fill="none" stroke-width="2" x1="190" y1="180" x2="410" y2="195" marker-end="url(#arrowhead)" style="color:#000000"/>
+  <line data-shape-id="s34" stroke="#000000" fill="none" stroke-width="2" x1="350" y1="135" x2="350" y2="135" marker-end="url(#arrowhead)" style="color:#000000"/>
+  <ellipse data-shape-id="s44" stroke="#000000" fill="#ffffff" stroke-width="2" cx="224" cy="108.5" rx="61" ry="40.5"/>
+  <text data-shape-id="s1" stroke="#000000" fill="#000000" stroke-width="2" x="411" y="122" font-size="16" font-family="sans-serif">test</text>
+  <text data-shape-id="s2" stroke="#000000" fill="#000000" stroke-width="2" x="221" y="267" font-size="16" font-family="sans-serif">hoge</text>
+</svg>
