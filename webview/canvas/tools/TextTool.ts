@@ -1,6 +1,7 @@
 import type { Point, DrawStyle, Tool } from "../../shared";
 import { TextShape, nextId } from "../../shared";
 import type { Shape } from "../../shared";
+import { DEFAULT_DRAW_STYLE } from "../drawStyle";
 
 export type TextInputRequest = {
   pt: Point;
@@ -10,7 +11,7 @@ export type TextInputRequest = {
 
 export class TextTool implements Tool {
   private clickPt: Point | undefined;
-  private style: DrawStyle = { stroke: "#000", fill: "#000", lineWidth: 1 };
+  private style: DrawStyle = { ...DEFAULT_DRAW_STYLE };
   private _onTextRequest: ((req: TextInputRequest) => void) | undefined;
 
   set onTextRequest(cb: (req: TextInputRequest) => void) {

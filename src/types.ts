@@ -1,5 +1,5 @@
 /** Supported shape types */
-export type ShapeType = "rect" | "ellipse" | "arrow" | "bubble" | "text" | "table";
+export type ShapeType = "rect" | "ellipse" | "arrow" | "bubble" | "text" | "table" | "image";
 
 /** A 2D point */
 export interface Point {
@@ -344,6 +344,69 @@ export class TableShape extends Shape {
   }
 }
 
+export class ImageShape extends Shape {
+  readonly type = "image" as const;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  dataUrl: string;
+
+  constructor(data: { id: string; x: number; y: number; width: number; height: number; dataUrl: string; stroke: string; fill: string; lineWidth: number; groupId?: string }) {
+    super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
+    this.x = data.x;
+    this.y = data.y;
+    this.width = data.width;
+    this.height = data.height;
+    this.dataUrl = data.dataUrl;
+  }
+
+  clone(newId?: string): ImageShape {
+    return new ImageShape({
+      id: newId ?? this.id,
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+      dataUrl: this.dataUrl,
+      stroke: this.stroke,
+      fill: this.fill,
+      lineWidth: this.lineWidth,
+      groupId: this.groupId,
+    });
+  }
+
+  hitTest(pt: Point, tolerance = 6): boolean {
+    return (
+      pt.x >= this.x - tolerance &&
+      pt.x <= this.x + this.width + tolerance &&
+      pt.y >= this.y - tolerance &&
+      pt.y <= this.y + this.height + tolerance
+    );
+  }
+
+  getBounds(): Bounds {
+    return { minX: this.x, minY: this.y, maxX: this.x + this.width, maxY: this.y + this.height };
+  }
+
+  getOrigin(): Point { return { x: this.x, y: this.y }; }
+
+  translate(dx: number, dy: number): ImageShape {
+    return new ImageShape({
+      id: this.id,
+      x: this.x + dx,
+      y: this.y + dy,
+      width: this.width,
+      height: this.height,
+      dataUrl: this.dataUrl,
+      stroke: this.stroke,
+      fill: this.fill,
+      lineWidth: this.lineWidth,
+      groupId: this.groupId,
+    });
+  }
+}
+
 function distToSegment(p: Point, a: Point, b: Point): number {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -363,7 +426,8 @@ export type ShapeJSON =
   | { type: "arrow"; id: string; x1: number; y1: number; x2: number; y2: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; groupId?: string }
   | { type: "bubble"; id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; groupId?: string }
   | { type: "text"; id: string; x: number; y: number; text: string; fontSize: number; stroke: string; fill: string; lineWidth: number; groupId?: string }
-  | { type: "table"; id: string; x: number; y: number; width: number; height: number; rows: number; cols: number; cells: string[][]; fontSize: number; stroke: string; fill: string; lineWidth: number; groupId?: string };
+  | { type: "table"; id: string; x: number; y: number; width: number; height: number; rows: number; cols: number; cells: string[][]; fontSize: number; stroke: string; fill: string; lineWidth: number; groupId?: string }
+  | { type: "image"; id: string; x: number; y: number; width: number; height: number; dataUrl: string; stroke: string; fill: string; lineWidth: number; groupId?: string };
 
 /** Reconstruct a Shape class instance from a plain JSON object */
 export function reviveShape(data: ShapeJSON): Shape {
@@ -374,7 +438,18 @@ export function reviveShape(data: ShapeJSON): Shape {
     case "bubble": return new BubbleShape(data);
     case "text": return new TextShape(data);
     case "table": return new TableShape(data);
+    case "image": return new ImageShape(data);
   }
+}
+
+export interface EditorSettings {
+  defaultStyle?: {
+    stroke: string;
+    fill: string;
+    lineWidth: number;
+  };
+  screenshotPasteEnabled?: boolean;
+  screenshotPasteMaxWidth?: number;
 }
 
 /** Reconstruct Shape instances from an array of plain JSON objects */
@@ -395,7 +470,7 @@ export type WebviewToExtMessage =
 /** Messages from Extension to WebView */
 export type ExtToWebviewMessage =
   | { command: "load"; shapes: ShapeJSON[] }
-  | { command: "init"; svgContent?: string }
+  | { command: "init"; svgContent?: string; settings?: EditorSettings }
   | { command: "templatesList"; templates: DiagramTemplateSummary[] }
   | { command: "templatePayload"; templateId: string; name: string; shapes: ShapeJSON[] }
   | { command: "templateSaved"; template: DiagramTemplateSummary }

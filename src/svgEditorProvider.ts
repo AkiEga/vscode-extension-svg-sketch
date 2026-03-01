@@ -7,6 +7,7 @@ import {
   loadTemplate,
   deleteTemplate,
 } from "./fileUtils";
+import { getEditorSettings } from "./settings";
 
 /**
  * Custom text editor provider that opens .svg files directly in the
@@ -37,6 +38,7 @@ export class SvgEditorProvider implements vscode.CustomTextEditorProvider {
             this.postMessage(webviewPanel, {
               command: "init",
               svgContent: document.getText(),
+              settings: getEditorSettings(),
             });
             await this.postTemplatesList(webviewPanel);
             break;

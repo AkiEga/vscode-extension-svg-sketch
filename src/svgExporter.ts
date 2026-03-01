@@ -89,6 +89,11 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
       case "table":
         lines.push(...renderTableSvg(shape, common));
         break;
+      case "image":
+        lines.push(
+          `  <image ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" href="${escapeXml(shape.dataUrl)}" preserveAspectRatio="none"/>`
+        );
+        break;
     }
   }
 

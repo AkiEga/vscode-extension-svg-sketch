@@ -26,6 +26,35 @@
           "type": "string",
           "default": ".svg-sketch/templates",
           "description": "Directory to store diagram templates (relative to workspace root)"
+        },
+        "svg-sketch.defaultStroke": {
+          "type": "string",
+          "default": "#000000",
+          "description": "Default stroke color for newly created shapes (hex color)."
+        },
+        "svg-sketch.defaultFill": {
+          "type": "string",
+          "default": "#ffffff",
+          "description": "Default fill color for newly created shapes (hex color)."
+        },
+        "svg-sketch.defaultLineWidth": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 20,
+          "description": "Default line width for newly created shapes."
+        },
+        "svg-sketch.screenshotPasteEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable pasting screenshots/images from clipboard into the canvas."
+        },
+        "svg-sketch.screenshotPasteMaxWidth": {
+          "type": "number",
+          "default": 1024,
+          "minimum": 128,
+          "maximum": 4096,
+          "description": "Maximum width of pasted screenshots in pixels."
         }
       }
     },

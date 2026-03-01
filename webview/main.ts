@@ -1,5 +1,6 @@
 import { CanvasEditor } from "./canvas/CanvasEditor";
-import { reviveShapes, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape } from "./shared";
+import { DEFAULT_DRAW_STYLE, resolveDrawStyleFromShapes } from "./canvas/drawStyle";
+import { reviveShapes, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape, ImageShape } from "./shared";
 import type {
   ToolType,
   DiagramData,
@@ -26,6 +27,9 @@ function postMessage(msg: WebviewToExtMessage): void {
 interface WebviewState {
   shapes: ShapeJSON[];
 }
+
+let screenshotPasteEnabled = true;
+let screenshotPasteMaxWidth = 1024;
 
 function saveState(shapes: Shape[]): void {
   // Shape class instances are JSON-serializable (enumerable properties)
@@ -104,12 +108,64 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+window.addEventListener("paste", async (e) => {
+  if (!screenshotPasteEnabled) { return; }
+  const items = e.clipboardData?.items;
+  if (!items || items.length === 0) { return; }
+
+  for (const item of Array.from(items)) {
+    if (item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (!file) { continue; }
+      e.preventDefault();
+      const dataUrl = await blobToDataUrl(file);
+      await editor.insertImageDataUrl(dataUrl, screenshotPasteMaxWidth);
+      saveState(editor.getShapes());
+      return;
+    }
+  }
+});
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Failed to read pasted image."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 // Style controls
 const strokeInput = document.getElementById("stroke-color") as HTMLInputElement;
 const fillInput = document.getElementById("fill-color") as HTMLInputElement;
 const lineWidthInput = document.getElementById("line-width") as HTMLInputElement;
 const borderlessInput = document.getElementById("borderless") as HTMLInputElement;
-let lineWidthBeforeBorderless = Math.max(1, parseInt(lineWidthInput.value, 10) || 2);
+let lineWidthBeforeBorderless = Math.max(1, parseInt(lineWidthInput.value, 10) || DEFAULT_DRAW_STYLE.lineWidth);
+
+function normalizeColorForPicker(value: string, fallback: string): string {
+  const v = value.trim();
+  const isHex = /^#[0-9a-fA-F]{6}$/.test(v) || /^#[0-9a-fA-F]{3}$/.test(v);
+  return isHex ? v : fallback;
+}
+
+function applyStyleToControlsAndEditor(style: { stroke: string; fill: string; lineWidth: number }): void {
+  const stroke = normalizeColorForPicker(style.stroke, DEFAULT_DRAW_STYLE.stroke);
+  const fill = normalizeColorForPicker(style.fill, DEFAULT_DRAW_STYLE.fill);
+  const width = Math.max(0, Math.round(style.lineWidth));
+
+  strokeInput.value = stroke;
+  fillInput.value = fill;
+  lineWidthInput.value = String(width);
+
+  const borderless = width === 0;
+  borderlessInput.checked = borderless;
+  lineWidthInput.disabled = borderless;
+  if (!borderless) {
+    lineWidthBeforeBorderless = Math.max(1, width);
+  }
+
+  editor.setCurrentStyle({ stroke, fill, lineWidth: width });
+}
 
 const applyStrokeStyle = (): void => {
   editor.setStyle({ stroke: strokeInput.value });
@@ -140,6 +196,13 @@ borderlessInput.addEventListener("change", () => {
   lineWidthInput.value = String(restore);
   lineWidthInput.disabled = false;
   editor.setStyle({ lineWidth: restore, stroke: strokeInput.value });
+});
+
+// Align editor style with initial controls (important for new diagrams).
+applyStyleToControlsAndEditor({
+  stroke: strokeInput.value,
+  fill: fillInput.value,
+  lineWidth: parseInt(lineWidthInput.value, 10) || DEFAULT_DRAW_STYLE.lineWidth,
 });
 
 // Action buttons
@@ -206,19 +269,24 @@ window.addEventListener("message", (event) => {
   const msg = event.data as ExtToWebviewMessage;
   switch (msg.command) {
     case "init":
+      screenshotPasteEnabled = msg.settings?.screenshotPasteEnabled ?? true;
+      screenshotPasteMaxWidth = Math.max(128, msg.settings?.screenshotPasteMaxWidth ?? 1024);
       if (msg.svgContent) {
         const data = parseDiagramJson(msg.svgContent);
         if (data) {
           editor.setShapes(data.shapes);
+          applyStyleToControlsAndEditor(msg.settings?.defaultStyle ?? resolveDrawStyleFromShapes(data.shapes));
           saveState(data.shapes);
         }
       } else {
         editor.setShapes([]);
+        applyStyleToControlsAndEditor(msg.settings?.defaultStyle ?? DEFAULT_DRAW_STYLE);
         saveState([]);
       }
       break;
     case "load":
       editor.setShapes(reviveShapes(msg.shapes));
+      applyStyleToControlsAndEditor(resolveDrawStyleFromShapes(editor.getShapes()));
       saveState(editor.getShapes());
       break;
     case "templatesList":
@@ -360,6 +428,9 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
     } else if (shape instanceof TextShape) {
       const escaped = shape.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       lines.push(`  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="sans-serif">${escaped}</text>`);
+    } else if (shape instanceof ImageShape) {
+      const href = shape.dataUrl.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
+      lines.push(`  <image ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" href="${href}" preserveAspectRatio="none"/>`);
     } else if (shape instanceof TableShape) {
       const { x: tx, y: ty, width: tw, height: th, rows, cols, cells, fontSize } = shape;
       const colW = tw / cols;

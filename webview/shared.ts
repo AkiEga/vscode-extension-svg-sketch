@@ -6,6 +6,7 @@ import {
   BubbleShape,
   TextShape,
   TableShape,
+  ImageShape,
   reviveShape,
   reviveShapes,
 } from "../src/types";
@@ -17,6 +18,7 @@ import type {
   Bounds,
   DiagramData,
   DiagramTemplateSummary,
+  EditorSettings,
   WebviewToExtMessage,
   ExtToWebviewMessage,
 } from "../src/types";
@@ -30,6 +32,7 @@ export {
   BubbleShape,
   TextShape,
   TableShape,
+  ImageShape,
   reviveShape,
   reviveShapes,
 };
@@ -41,6 +44,7 @@ export type {
   Bounds,
   DiagramData,
   DiagramTemplateSummary,
+  EditorSettings,
   WebviewToExtMessage,
   ExtToWebviewMessage,
 };

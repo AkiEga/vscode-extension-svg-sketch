@@ -1,11 +1,12 @@
 import type { Point, DrawStyle, Tool } from "../../shared";
 import { RectShape, nextId } from "../../shared";
 import type { Shape } from "../../shared";
+import { DEFAULT_DRAW_STYLE } from "../drawStyle";
 
 export class RectTool implements Tool {
   private start: Point | undefined;
   private current: Point | undefined;
-  private style: DrawStyle = { stroke: "#000", fill: "#fff", lineWidth: 2 };
+  private style: DrawStyle = { ...DEFAULT_DRAW_STYLE };
 
   onMouseDown(pt: Point, style: DrawStyle): void {
     this.start = pt;

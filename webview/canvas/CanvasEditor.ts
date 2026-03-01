@@ -1,5 +1,5 @@
 import type { Shape, ToolType, DrawStyle, Point, Tool } from "../shared";
-import { hitTest, TextShape, TableShape, RectShape, EllipseShape, ArrowShape, BubbleShape, nextId } from "../shared";
+import { hitTest, TextShape, TableShape, RectShape, EllipseShape, ArrowShape, BubbleShape, ImageShape, nextId } from "../shared";
 import { RectTool } from "./tools/RectTool";
 import { EllipseTool } from "./tools/EllipseTool";
 import { ArrowTool } from "./tools/ArrowTool";
@@ -9,6 +9,7 @@ import { TableTool, type TableConfigRequest } from "./tools/TableTool";
 import { SelectTool } from "./tools/SelectTool";
 import { renderShapes } from "./render";
 import { prepareTemplateInsertion } from "./templateInsert";
+import { DEFAULT_DRAW_STYLE } from "./drawStyle";
 
 /** Snap a value to the nearest grid line */
 function snapValue(value: number, gridSize: number): number {
@@ -21,7 +22,7 @@ export class CanvasEditor {
   private shapes: Shape[] = [];
   private currentToolType: ToolType = "select";
   private currentTool: Tool;
-  private style: DrawStyle = { stroke: "#000000", fill: "#ffffff", lineWidth: 2 };
+  private style: DrawStyle = { ...DEFAULT_DRAW_STYLE };
   private isDragging = false;
   private selectedIds: Set<string> = new Set();
   private selectTool: SelectTool;
@@ -114,6 +115,15 @@ export class CanvasEditor {
         this.render();
       }
     }
+  }
+
+  /** Update current drawing style only (does not modify existing shapes). */
+  setCurrentStyle(style: Partial<DrawStyle>): void {
+    Object.assign(this.style, style);
+  }
+
+  getCurrentStyle(): DrawStyle {
+    return { ...this.style };
   }
 
   setOnSelectionChange(cb: (ids: Set<string>) => void): void {
@@ -265,7 +275,7 @@ export class CanvasEditor {
     const minDiameter = gs;
     const minRadius = Math.max(1, gs / 2);
 
-    if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TableShape) {
+    if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TableShape || shape instanceof ImageShape) {
       shape.x = snapValue(shape.x, gs);
       shape.y = snapValue(shape.y, gs);
       shape.width = Math.max(minDiameter, snapValue(shape.width, gs));
@@ -495,15 +505,15 @@ export class CanvasEditor {
   editSelectedShapeLabel(): void {
     const shape = this.getSelectedShape();
     if (!shape) { return; }
-    if (shape.type === "table") {
+    if (shape instanceof TableShape) {
       this.editTableCell(shape, { x: shape.x + 1, y: shape.y + 1 });
       return;
     }
-    if (shape.type === "text") {
+    if (shape instanceof TextShape) {
       this.editTextShape(shape);
       return;
     }
-    if (shape.type === "rect" || shape.type === "ellipse" || shape.type === "arrow" || shape.type === "bubble") {
+    if (shape instanceof RectShape || shape instanceof EllipseShape || shape instanceof ArrowShape || shape instanceof BubbleShape) {
       this.editShapeLabel(shape);
     }
   }
@@ -691,6 +701,43 @@ export class CanvasEditor {
     return this.shapes.filter((s) => this.selectedIds.has(s.id));
   }
 
+  async insertImageDataUrl(dataUrl: string, maxWidth = 1024): Promise<void> {
+    const image = await this.loadImage(dataUrl);
+    const ratio = image.naturalWidth > 0 ? image.naturalHeight / image.naturalWidth : 1;
+    const width = Math.max(40, Math.min(maxWidth, image.naturalWidth || 320));
+    const height = Math.max(40, Math.round(width * ratio));
+    const x = Math.max(0, (this.canvas.width - width) / 2);
+    const y = Math.max(0, (this.canvas.height - height) / 2);
+
+    const shape = new ImageShape({
+      id: nextId(),
+      x,
+      y,
+      width,
+      height,
+      dataUrl,
+      stroke: this.style.stroke,
+      fill: "none",
+      lineWidth: this.style.lineWidth,
+    });
+
+    this.pushUndo();
+    this.shapes.push(shape);
+    this.selectedIds = new Set([shape.id]);
+    this.onSelectionChange(new Set(this.selectedIds));
+    this.onChange();
+    this.render();
+  }
+
+  private loadImage(dataUrl: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Failed to load pasted image."));
+      image.src = dataUrl;
+    });
+  }
+
   groupSelected(): void {
     if (this.selectedIds.size < 2) { return; }
     this.pushUndo();
@@ -718,7 +765,7 @@ export class CanvasEditor {
 
   addTableRow(): void {
     const shape = this.getSelectedShape();
-    if (!shape || shape.type !== "table") { return; }
+    if (!(shape instanceof TableShape)) { return; }
     this.pushUndo();
     shape.rows += 1;
     shape.cells.push(new Array(shape.cols).fill(""));
@@ -729,7 +776,7 @@ export class CanvasEditor {
 
   deleteTableRow(): void {
     const shape = this.getSelectedShape();
-    if (!shape || shape.type !== "table" || shape.rows <= 1) { return; }
+    if (!(shape instanceof TableShape) || shape.rows <= 1) { return; }
     this.pushUndo();
     const rowH = shape.height / shape.rows;
     shape.rows -= 1;
@@ -741,7 +788,7 @@ export class CanvasEditor {
 
   addTableColumn(): void {
     const shape = this.getSelectedShape();
-    if (!shape || shape.type !== "table") { return; }
+    if (!(shape instanceof TableShape)) { return; }
     this.pushUndo();
     shape.cols += 1;
     for (const row of shape.cells) {
@@ -754,7 +801,7 @@ export class CanvasEditor {
 
   deleteTableColumn(): void {
     const shape = this.getSelectedShape();
-    if (!shape || shape.type !== "table" || shape.cols <= 1) { return; }
+    if (!(shape instanceof TableShape) || shape.cols <= 1) { return; }
     this.pushUndo();
     const colW = shape.width / shape.cols;
     shape.cols -= 1;
@@ -801,13 +848,13 @@ export class CanvasEditor {
       case "ellipse":
       case "arrow":
       case "bubble":
-        this.editShapeLabel(shape);
+        this.editShapeLabel(shape as RectShape | EllipseShape | ArrowShape | BubbleShape);
         break;
       case "text":
-        this.editTextShape(shape);
+        this.editTextShape(shape as TextShape);
         break;
       case "table":
-        this.editTableCell(shape, pt);
+        this.editTableCell(shape as TableShape, pt);
         break;
       // rect, ellipse, arrow: no double-click editor — use drag handles
     }

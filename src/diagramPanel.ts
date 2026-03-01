@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { WebviewToExtMessage, ExtToWebviewMessage } from "./types";
+import { reviveShapes, type WebviewToExtMessage, type ExtToWebviewMessage, type ShapeJSON } from "./types";
 import {
   listTemplates,
   saveTemplate,
@@ -7,6 +7,7 @@ import {
   loadTemplate,
   deleteTemplate,
 } from "./fileUtils";
+import { getEditorSettings } from "./settings";
 
 export class DiagramPanel {
   public static readonly viewType = "svgSketch.editor";
@@ -16,6 +17,7 @@ export class DiagramPanel {
   private readonly extensionUri: vscode.Uri;
   private mdEditor: vscode.TextEditor | undefined;
   private existingSvgUri: vscode.Uri | undefined;
+  private pendingInitSvgContent: string | undefined;
   private disposables: vscode.Disposable[] = [];
 
   private constructor(
@@ -49,8 +51,9 @@ export class DiagramPanel {
     if (DiagramPanel.instance) {
       DiagramPanel.instance.mdEditor = mdEditor;
       DiagramPanel.instance.existingSvgUri = undefined;
+      DiagramPanel.instance.pendingInitSvgContent = undefined;
       DiagramPanel.instance.panel.reveal(vscode.ViewColumn.Beside);
-      DiagramPanel.instance.postMessage({ command: "init" });
+      DiagramPanel.instance.postMessage({ command: "init", settings: getEditorSettings() });
       return DiagramPanel.instance;
     }
 
@@ -76,7 +79,8 @@ export class DiagramPanel {
   ): DiagramPanel {
     const inst = DiagramPanel.createOrShow(extensionUri);
     inst.existingSvgUri = svgUri;
-    inst.postMessage({ command: "init", svgContent });
+    inst.pendingInitSvgContent = svgContent;
+    inst.postMessage({ command: "init", svgContent, settings: getEditorSettings() });
     return inst;
   }
 
@@ -87,13 +91,15 @@ export class DiagramPanel {
   private async onMessage(msg: WebviewToExtMessage): Promise<void> {
     switch (msg.command) {
       case "ready":
+        this.postMessage({ command: "init", svgContent: this.pendingInitSvgContent, settings: getEditorSettings() });
+        this.pendingInitSvgContent = undefined;
         await this.postTemplatesList();
         break;
       case "listTemplates":
         await this.postTemplatesList();
         break;
       case "saveTemplate": {
-        const saved = await saveTemplate(msg.name, msg.shapes);
+        const saved = await saveTemplate(msg.name, reviveShapes(msg.shapes));
         if (!saved) {
           this.postMessage({ command: "error", message: "Template name and shapes are required." });
           return;
@@ -125,7 +131,7 @@ export class DiagramPanel {
           command: "templatePayload",
           templateId: template.id,
           name: template.name,
-          shapes: template.diagram.shapes,
+          shapes: template.diagram.shapes as unknown as ShapeJSON[],
         });
         break;
       }

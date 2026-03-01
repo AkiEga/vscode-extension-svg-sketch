@@ -1,5 +1,5 @@
 import type { Point, DrawStyle, Tool, MouseOptions } from "../../shared";
-import { Shape, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape } from "../../shared";
+import { Shape, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape, ImageShape } from "../../shared";
 import { hitTest } from "../../shared";
 import type { Bounds } from "../../shared";
 
@@ -55,7 +55,7 @@ function moveShapeBy(shape: Shape, dx: number, dy: number): void {
     shape.x2 += dx; shape.y2 += dy;
   } else if (shape instanceof EllipseShape) {
     shape.cx += dx; shape.cy += dy;
-  } else if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TextShape || shape instanceof TableShape) {
+  } else if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TextShape || shape instanceof TableShape || shape instanceof ImageShape) {
     shape.x += dx; shape.y += dy;
   }
 }
@@ -418,6 +418,9 @@ export class SelectTool implements Tool {
     if (shape instanceof BubbleShape) {
       return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
     }
+    if (shape instanceof ImageShape) {
+      return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+    }
     return {};
   }
 
@@ -431,7 +434,7 @@ export class SelectTool implements Tool {
       return;
     }
 
-    if (shape.type === "rect" || shape.type === "bubble" || shape.type === "table") {
+    if (shape.type === "rect" || shape.type === "bubble" || shape.type === "table" || shape.type === "image") {
       let newX = o.x, newY = o.y, newW = o.width, newH = o.height;
       switch (handle) {
         case "tl":

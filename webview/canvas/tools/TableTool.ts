@@ -1,6 +1,7 @@
 import type { Point, DrawStyle, Tool } from "../../shared";
 import { TableShape, nextId } from "../../shared";
 import type { Shape } from "../../shared";
+import { DEFAULT_DRAW_STYLE } from "../drawStyle";
 
 export type TableConfigRequest = {
   pt: Point;
@@ -12,7 +13,7 @@ export type TableConfigRequest = {
 export class TableTool implements Tool {
   private start: Point | undefined;
   private current: Point | undefined;
-  private style: DrawStyle = { stroke: "#000", fill: "#fff", lineWidth: 2 };
+  private style: DrawStyle = { ...DEFAULT_DRAW_STYLE };
   private _onTableRequest: ((req: TableConfigRequest) => void) | undefined;
 
   set onTableRequest(cb: (req: TableConfigRequest) => void) {

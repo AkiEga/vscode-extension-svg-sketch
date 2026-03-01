@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { shapesToSvg, parseDiagramData } from "../src/svgExporter";
-import { RectShape, EllipseShape, ArrowShape, TextShape, type Shape } from "../src/types";
+import { RectShape, EllipseShape, ArrowShape, TextShape, ImageShape, type Shape } from "../src/types";
 
 // --- FR-4: SVG ファイル保存 ---
 
@@ -104,6 +104,26 @@ describe("shapesToSvg", () => {
     expect(svg).toContain("&lt;Hello&gt; &amp; &quot;World&quot;");
     // <text> 要素内ではエスケープされている（data-diagram JSON 内の生テキストは許容）
     expect(svg).toMatch(/<text[^>]*>&lt;Hello&gt;/);
+  });
+
+  it("image を SVG の image 要素として出力する", () => {
+    const image = new ImageShape({
+      id: "img1",
+      x: 10,
+      y: 20,
+      width: 200,
+      height: 100,
+      dataUrl: "data:image/png;base64,AAAA",
+      stroke: "#000",
+      fill: "none",
+      lineWidth: 1,
+    });
+    const svg = shapesToSvg([image]);
+    expect(svg).toContain("<image");
+    expect(svg).toContain('data-shape-id="img1"');
+    expect(svg).toContain('href="data:image/png;base64,AAAA"');
+    expect(svg).toContain('width="200"');
+    expect(svg).toContain('height="100"');
   });
 
   it("複数の shapes を含む SVG を生成する", () => {

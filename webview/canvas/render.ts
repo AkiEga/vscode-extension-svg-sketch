@@ -1,9 +1,10 @@
-import { Shape, ArrowShape, TableShape, BubbleShape } from "../shared";
+import { Shape, RectShape, EllipseShape, ArrowShape, TableShape, BubbleShape, TextShape, ImageShape } from "../shared";
 import type { Point } from "../shared";
 import { getShapeHandles } from "./tools/SelectTool";
 import type { RubberBand } from "./tools/SelectTool";
 
 const HANDLE_SIZE = 6;
+const imageCache = new Map<string, HTMLImageElement>();
 
 function hasVisibleStroke(shape: Shape): boolean {
   return shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent";
@@ -71,47 +72,90 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
   ctx.lineWidth = drawStroke ? shape.lineWidth : 0;
 
   switch (shape.type) {
-    case "rect":
-      if (shape.fill !== "none" && shape.fill !== "transparent") {
-        ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+    case "rect": {
+      const s = shape as RectShape;
+      if (s.fill !== "none" && s.fill !== "transparent") {
+        ctx.fillRect(s.x, s.y, s.width, s.height);
       }
       if (drawStroke) {
-        ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+        ctx.strokeRect(s.x, s.y, s.width, s.height);
       }
-      drawShapeLabel(ctx, shape, shape.x + shape.width / 2, shape.y + shape.height / 2);
+      drawShapeLabel(ctx, s, s.x + s.width / 2, s.y + s.height / 2);
       break;
+    }
 
-    case "ellipse":
+    case "ellipse": {
+      const s = shape as EllipseShape;
       ctx.beginPath();
-      ctx.ellipse(shape.cx, shape.cy, Math.max(shape.rx, 0), Math.max(shape.ry, 0), 0, 0, Math.PI * 2);
-      if (shape.fill !== "none" && shape.fill !== "transparent") {
+      ctx.ellipse(s.cx, s.cy, Math.max(s.rx, 0), Math.max(s.ry, 0), 0, 0, Math.PI * 2);
+      if (s.fill !== "none" && s.fill !== "transparent") {
         ctx.fill();
       }
       if (drawStroke) {
         ctx.stroke();
       }
-      drawShapeLabel(ctx, shape, shape.cx, shape.cy);
+      drawShapeLabel(ctx, s, s.cx, s.cy);
       break;
+    }
 
-    case "arrow":
-      drawArrow(ctx, shape.x1, shape.y1, shape.x2, shape.y2);
-      drawShapeLabel(ctx, shape, (shape.x1 + shape.x2) / 2, (shape.y1 + shape.y2) / 2 - 10);
+    case "arrow": {
+      const s = shape as ArrowShape;
+      drawArrow(ctx, s.x1, s.y1, s.x2, s.y2);
+      drawShapeLabel(ctx, s, (s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2 - 10);
       break;
+    }
 
-    case "bubble":
-      drawBubble(ctx, shape);
-      drawShapeLabel(ctx, shape, shape.x + shape.width / 2, shape.y + shape.height / 2);
+    case "bubble": {
+      const s = shape as BubbleShape;
+      drawBubble(ctx, s);
+      drawShapeLabel(ctx, s, s.x + s.width / 2, s.y + s.height / 2);
       break;
+    }
 
-    case "text":
-      ctx.font = `${shape.fontSize}px sans-serif`;
-      ctx.fillStyle = shape.stroke; // text rendered with stroke color
-      ctx.fillText(shape.text, shape.x, shape.y);
+    case "text": {
+      const s = shape as TextShape;
+      ctx.font = `${s.fontSize}px sans-serif`;
+      ctx.fillStyle = s.stroke; // text rendered with stroke color
+      ctx.fillText(s.text, s.x, s.y);
       break;
+    }
 
-    case "table":
-      drawTable(ctx, shape);
+    case "table": {
+      const s = shape as TableShape;
+      drawTable(ctx, s);
       break;
+    }
+
+    case "image": {
+      const s = shape as ImageShape;
+      drawImageShape(ctx, s, drawStroke);
+      break;
+    }
+  }
+}
+
+function drawImageShape(ctx: CanvasRenderingContext2D, shape: ImageShape, drawStroke: boolean): void {
+  let img = imageCache.get(shape.id);
+  if (!img || img.src !== shape.dataUrl) {
+    img = new Image();
+    img.src = shape.dataUrl;
+    img.onload = () => {
+      // image onload redraws on next render cycle; no-op here because caller re-renders frequently.
+    };
+    imageCache.set(shape.id, img);
+  }
+
+  if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+    ctx.drawImage(img, shape.x, shape.y, shape.width, shape.height);
+  } else {
+    ctx.save();
+    ctx.fillStyle = "#f3f4f6";
+    ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+    ctx.restore();
+  }
+
+  if (drawStroke) {
+    ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
   }
 }
 
