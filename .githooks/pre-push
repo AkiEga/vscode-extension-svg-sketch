@@ -1,0 +1,29 @@
+#!/bin/sh
+# pre-push hook: production ビルド → VSIX 生成 → release/ を自動コミット & プッシュ
+set -e
+
+REMOTE="$1"   # git push で指定されたリモート名 (例: origin)
+
+echo "[pre-push] Building production bundle..."
+npm run build
+
+echo "[pre-push] Packaging VSIX into release/..."
+mkdir -p release
+npx @vscode/vsce package --out release/
+
+# release/ の変更をステージし、差分があればコミット & プッシュ
+git add release/
+
+if ! git diff --cached --quiet release/; then
+  echo "[pre-push] Committing VSIX to repository..."
+  git commit --no-verify -m "chore: update VSIX release"
+
+  BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  echo "[pre-push] Pushing VSIX commit to ${REMOTE}/${BRANCH}..."
+  git push --no-verify "$REMOTE" "$BRANCH" || \
+    echo "[pre-push] Note: separate push failed; VSIX commit will be carried by the main push."
+else
+  echo "[pre-push] No changes in release/, skipping commit."
+fi
+
+echo "[pre-push] Done."

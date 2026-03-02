@@ -113,7 +113,9 @@
     "test:watch": "vitest",
     "cli": "node out/svg-sketch-cli.js",
     "serve": "node out/svg-sketch-cli.js serve",
-    "test:e2e": "npx playwright test"
+    "test:e2e": "npx playwright test",
+    "package:vsix": "npm run build && mkdir -p release && npx @vscode/vsce package --out release/",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
@@ -121,6 +123,7 @@
     "@types/vscode": "^1.86.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.20.0",
     "eslint": "^8.56.0",
     "typescript": "^5.3.0",
