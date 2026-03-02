@@ -56,8 +56,10 @@ export class RectShape extends Shape {
   height: number;
   label?: string;
   labelFontSize?: number;
+  labelFontFamily?: string;
+  labelFontColor?: string;
 
-  constructor(data: { id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; groupId?: string }) {
+  constructor(data: { id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }) {
     super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
     this.x = data.x;
     this.y = data.y;
@@ -65,10 +67,12 @@ export class RectShape extends Shape {
     this.height = data.height;
     this.label = data.label;
     this.labelFontSize = data.labelFontSize;
+    this.labelFontFamily = data.labelFontFamily;
+    this.labelFontColor = data.labelFontColor;
   }
 
   clone(newId?: string): RectShape {
-    return new RectShape({ id: newId ?? this.id, x: this.x, y: this.y, width: this.width, height: this.height, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, groupId: this.groupId });
+    return new RectShape({ id: newId ?? this.id, x: this.x, y: this.y, width: this.width, height: this.height, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
   }
 
   hitTest(pt: Point, tolerance = 6): boolean {
@@ -87,7 +91,7 @@ export class RectShape extends Shape {
   getOrigin(): Point { return { x: this.x, y: this.y }; }
 
   translate(dx: number, dy: number): RectShape {
-    return new RectShape({ id: this.id, x: this.x + dx, y: this.y + dy, width: this.width, height: this.height, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, groupId: this.groupId });
+    return new RectShape({ id: this.id, x: this.x + dx, y: this.y + dy, width: this.width, height: this.height, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
   }
 }
 
@@ -99,8 +103,10 @@ export class EllipseShape extends Shape {
   ry: number;
   label?: string;
   labelFontSize?: number;
+  labelFontFamily?: string;
+  labelFontColor?: string;
 
-  constructor(data: { id: string; cx: number; cy: number; rx: number; ry: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; groupId?: string }) {
+  constructor(data: { id: string; cx: number; cy: number; rx: number; ry: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }) {
     super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
     this.cx = data.cx;
     this.cy = data.cy;
@@ -108,10 +114,12 @@ export class EllipseShape extends Shape {
     this.ry = data.ry;
     this.label = data.label;
     this.labelFontSize = data.labelFontSize;
+    this.labelFontFamily = data.labelFontFamily;
+    this.labelFontColor = data.labelFontColor;
   }
 
   clone(newId?: string): EllipseShape {
-    return new EllipseShape({ id: newId ?? this.id, cx: this.cx, cy: this.cy, rx: this.rx, ry: this.ry, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, groupId: this.groupId });
+    return new EllipseShape({ id: newId ?? this.id, cx: this.cx, cy: this.cy, rx: this.rx, ry: this.ry, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
   }
 
   hitTest(pt: Point, tolerance = 6): boolean {
@@ -127,7 +135,7 @@ export class EllipseShape extends Shape {
   getOrigin(): Point { return { x: this.cx, y: this.cy }; }
 
   translate(dx: number, dy: number): EllipseShape {
-    return new EllipseShape({ id: this.id, cx: this.cx + dx, cy: this.cy + dy, rx: this.rx, ry: this.ry, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, groupId: this.groupId });
+    return new EllipseShape({ id: this.id, cx: this.cx + dx, cy: this.cy + dy, rx: this.rx, ry: this.ry, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
   }
 }
 
@@ -139,8 +147,10 @@ export class ArrowShape extends Shape {
   y2: number;
   label?: string;
   labelFontSize?: number;
+  labelFontFamily?: string;
+  labelFontColor?: string;
 
-  constructor(data: { id: string; x1: number; y1: number; x2: number; y2: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; groupId?: string }) {
+  constructor(data: { id: string; x1: number; y1: number; x2: number; y2: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }) {
     super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
     this.x1 = data.x1;
     this.y1 = data.y1;
@@ -148,10 +158,12 @@ export class ArrowShape extends Shape {
     this.y2 = data.y2;
     this.label = data.label;
     this.labelFontSize = data.labelFontSize;
+    this.labelFontFamily = data.labelFontFamily;
+    this.labelFontColor = data.labelFontColor;
   }
 
   clone(newId?: string): ArrowShape {
-    return new ArrowShape({ id: newId ?? this.id, x1: this.x1, y1: this.y1, x2: this.x2, y2: this.y2, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, groupId: this.groupId });
+    return new ArrowShape({ id: newId ?? this.id, x1: this.x1, y1: this.y1, x2: this.x2, y2: this.y2, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
   }
 
   hitTest(pt: Point, tolerance = 6): boolean {
@@ -171,7 +183,7 @@ export class ArrowShape extends Shape {
   getOrigin(): Point { return { x: this.x1, y: this.y1 }; }
 
   translate(dx: number, dy: number): ArrowShape {
-    return new ArrowShape({ id: this.id, x1: this.x1 + dx, y1: this.y1 + dy, x2: this.x2 + dx, y2: this.y2 + dy, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, groupId: this.groupId });
+    return new ArrowShape({ id: this.id, x1: this.x1 + dx, y1: this.y1 + dy, x2: this.x2 + dx, y2: this.y2 + dy, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
   }
 }
 
@@ -183,8 +195,10 @@ export class BubbleShape extends Shape {
   height: number;
   label?: string;
   labelFontSize?: number;
+  labelFontFamily?: string;
+  labelFontColor?: string;
 
-  constructor(data: { id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; groupId?: string }) {
+  constructor(data: { id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }) {
     super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
     this.x = data.x;
     this.y = data.y;
@@ -192,6 +206,8 @@ export class BubbleShape extends Shape {
     this.height = data.height;
     this.label = data.label;
     this.labelFontSize = data.labelFontSize;
+    this.labelFontFamily = data.labelFontFamily;
+    this.labelFontColor = data.labelFontColor;
   }
 
   clone(newId?: string): BubbleShape {
@@ -206,6 +222,8 @@ export class BubbleShape extends Shape {
       lineWidth: this.lineWidth,
       label: this.label,
       labelFontSize: this.labelFontSize,
+      labelFontFamily: this.labelFontFamily,
+      labelFontColor: this.labelFontColor,
       groupId: this.groupId,
     });
   }
@@ -237,6 +255,8 @@ export class BubbleShape extends Shape {
       lineWidth: this.lineWidth,
       label: this.label,
       labelFontSize: this.labelFontSize,
+      labelFontFamily: this.labelFontFamily,
+      labelFontColor: this.labelFontColor,
       groupId: this.groupId,
     });
   }
@@ -248,17 +268,21 @@ export class TextShape extends Shape {
   y: number;
   text: string;
   fontSize: number;
+  fontFamily?: string;
+  fontColor?: string;
 
-  constructor(data: { id: string; x: number; y: number; text: string; fontSize: number; stroke: string; fill: string; lineWidth: number; groupId?: string }) {
+  constructor(data: { id: string; x: number; y: number; text: string; fontSize: number; fontFamily?: string; fontColor?: string; stroke: string; fill: string; lineWidth: number; groupId?: string }) {
     super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
     this.x = data.x;
     this.y = data.y;
     this.text = data.text;
     this.fontSize = data.fontSize;
+    this.fontFamily = data.fontFamily;
+    this.fontColor = data.fontColor;
   }
 
   clone(newId?: string): TextShape {
-    return new TextShape({ id: newId ?? this.id, x: this.x, y: this.y, text: this.text, fontSize: this.fontSize, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, groupId: this.groupId });
+    return new TextShape({ id: newId ?? this.id, x: this.x, y: this.y, text: this.text, fontSize: this.fontSize, fontFamily: this.fontFamily, fontColor: this.fontColor, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, groupId: this.groupId });
   }
 
   hitTest(pt: Point, tolerance = 6): boolean {
@@ -278,7 +302,7 @@ export class TextShape extends Shape {
   getOrigin(): Point { return { x: this.x, y: this.y }; }
 
   translate(dx: number, dy: number): TextShape {
-    return new TextShape({ id: this.id, x: this.x + dx, y: this.y + dy, text: this.text, fontSize: this.fontSize, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, groupId: this.groupId });
+    return new TextShape({ id: this.id, x: this.x + dx, y: this.y + dy, text: this.text, fontSize: this.fontSize, fontFamily: this.fontFamily, fontColor: this.fontColor, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, groupId: this.groupId });
   }
 }
 
@@ -293,8 +317,10 @@ export class TableShape extends Shape {
   /** Row-major 2D array of cell text. cells[row][col] */
   cells: string[][];
   fontSize: number;
+  fontFamily?: string;
+  fontColor?: string;
 
-  constructor(data: { id: string; x: number; y: number; width: number; height: number; rows: number; cols: number; cells: string[][]; fontSize: number; stroke: string; fill: string; lineWidth: number; groupId?: string }) {
+  constructor(data: { id: string; x: number; y: number; width: number; height: number; rows: number; cols: number; cells: string[][]; fontSize: number; fontFamily?: string; fontColor?: string; stroke: string; fill: string; lineWidth: number; groupId?: string }) {
     super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
     this.x = data.x;
     this.y = data.y;
@@ -304,6 +330,8 @@ export class TableShape extends Shape {
     this.cols = data.cols;
     this.cells = data.cells;
     this.fontSize = data.fontSize;
+    this.fontFamily = data.fontFamily;
+    this.fontColor = data.fontColor;
   }
 
   clone(newId?: string): TableShape {
@@ -312,7 +340,7 @@ export class TableShape extends Shape {
       x: this.x, y: this.y, width: this.width, height: this.height,
       rows: this.rows, cols: this.cols,
       cells: this.cells.map(row => [...row]),
-      fontSize: this.fontSize,
+      fontSize: this.fontSize, fontFamily: this.fontFamily, fontColor: this.fontColor,
       stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, groupId: this.groupId,
     });
   }
@@ -338,7 +366,7 @@ export class TableShape extends Shape {
       x: this.x + dx, y: this.y + dy, width: this.width, height: this.height,
       rows: this.rows, cols: this.cols,
       cells: this.cells.map(row => [...row]),
-      fontSize: this.fontSize,
+      fontSize: this.fontSize, fontFamily: this.fontFamily, fontColor: this.fontColor,
       stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, groupId: this.groupId,
     });
   }
@@ -421,12 +449,12 @@ function distToSegment(p: Point, a: Point, b: Point): number {
 
 /** Plain-object shape representation (for JSON deserialization) */
 export type ShapeJSON =
-  | { type: "rect"; id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; groupId?: string }
-  | { type: "ellipse"; id: string; cx: number; cy: number; rx: number; ry: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; groupId?: string }
-  | { type: "arrow"; id: string; x1: number; y1: number; x2: number; y2: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; groupId?: string }
-  | { type: "bubble"; id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; groupId?: string }
-  | { type: "text"; id: string; x: number; y: number; text: string; fontSize: number; stroke: string; fill: string; lineWidth: number; groupId?: string }
-  | { type: "table"; id: string; x: number; y: number; width: number; height: number; rows: number; cols: number; cells: string[][]; fontSize: number; stroke: string; fill: string; lineWidth: number; groupId?: string }
+  | { type: "rect"; id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }
+  | { type: "ellipse"; id: string; cx: number; cy: number; rx: number; ry: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }
+  | { type: "arrow"; id: string; x1: number; y1: number; x2: number; y2: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }
+  | { type: "bubble"; id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }
+  | { type: "text"; id: string; x: number; y: number; text: string; fontSize: number; fontFamily?: string; fontColor?: string; stroke: string; fill: string; lineWidth: number; groupId?: string }
+  | { type: "table"; id: string; x: number; y: number; width: number; height: number; rows: number; cols: number; cells: string[][]; fontSize: number; fontFamily?: string; fontColor?: string; stroke: string; fill: string; lineWidth: number; groupId?: string }
   | { type: "image"; id: string; x: number; y: number; width: number; height: number; dataUrl: string; stroke: string; fill: string; lineWidth: number; groupId?: string };
 
 /** Reconstruct a Shape class instance from a plain JSON object */

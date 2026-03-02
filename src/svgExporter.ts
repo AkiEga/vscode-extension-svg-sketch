@@ -31,7 +31,9 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
           const lx = shape.x + shape.width / 2;
           const ly = shape.y + shape.height / 2;
           const fs = shape.labelFontSize ?? 16;
-          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+          const ff = shape.labelFontFamily ?? "sans-serif";
+          const fc = shape.labelFontColor ?? shape.stroke;
+          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
         }
         break;
       case "ellipse":
@@ -40,7 +42,9 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
         );
         if (shape.label) {
           const fs = shape.labelFontSize ?? 16;
-          lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+          const ff = shape.labelFontFamily ?? "sans-serif";
+          const fc = shape.labelFontColor ?? shape.stroke;
+          lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
         }
         break;
       case "arrow":
@@ -51,7 +55,9 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
           const lx = (shape.x1 + shape.x2) / 2;
           const ly = (shape.y1 + shape.y2) / 2 - 10;
           const fs = shape.labelFontSize ?? 16;
-          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+          const ff = shape.labelFontFamily ?? "sans-serif";
+          const fc = shape.labelFontColor ?? shape.stroke;
+          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
         }
         break;
       case "bubble": {
@@ -77,13 +83,15 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
           const lx = shape.x + shape.width / 2;
           const ly = shape.y + shape.height / 2;
           const fs = shape.labelFontSize ?? 16;
-          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+          const ff = shape.labelFontFamily ?? "sans-serif";
+          const fc = shape.labelFontColor ?? shape.stroke;
+          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
         }
         break;
       }
       case "text":
         lines.push(
-          `  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="sans-serif">${escapeXml(shape.text)}</text>`
+          `  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="${shape.fontFamily ?? "sans-serif"}" fill="${shape.fontColor ?? shape.stroke}">${escapeXml(shape.text)}</text>`
         );
         break;
       case "table":
@@ -139,7 +147,7 @@ function renderTableSvg(shape: TableShape, common: string): string[] {
       if (text) {
         const tx = x + c * colW + 6;
         const ty = y + r * rowH + rowH / 2;
-        lines.push(`    <text x="${tx}" y="${ty}" font-size="${fontSize}" font-family="sans-serif" fill="${shape.stroke}" dominant-baseline="central">${escapeXml(text)}</text>`);
+        lines.push(`    <text x="${tx}" y="${ty}" font-size="${fontSize}" font-family="${shape.fontFamily ?? "sans-serif"}" fill="${shape.fontColor ?? shape.stroke}" dominant-baseline="central">${escapeXml(text)}</text>`);
       }
     }
   }

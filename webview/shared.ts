@@ -53,6 +53,9 @@ export interface DrawStyle {
   stroke: string;
   fill: string;
   lineWidth: number;
+  fontSize: number;
+  fontFamily: string;
+  fontColor: string;
 }
 
 /** Modifier key state passed from mouse events */

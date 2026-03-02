@@ -110,6 +110,22 @@ export class CanvasEditor {
           if (style.stroke !== undefined) { shape.stroke = style.stroke; }
           if (style.fill !== undefined) { shape.fill = style.fill; }
           if (style.lineWidth !== undefined) { shape.lineWidth = style.lineWidth; }
+          // Apply font properties to text-bearing shapes
+          if (shape instanceof TextShape) {
+            if (style.fontSize !== undefined) { shape.fontSize = style.fontSize; }
+            if (style.fontFamily !== undefined) { shape.fontFamily = style.fontFamily; }
+            if (style.fontColor !== undefined) { shape.fontColor = style.fontColor; }
+          }
+          if (shape instanceof TableShape) {
+            if (style.fontSize !== undefined) { shape.fontSize = style.fontSize; }
+            if (style.fontFamily !== undefined) { shape.fontFamily = style.fontFamily; }
+            if (style.fontColor !== undefined) { shape.fontColor = style.fontColor; }
+          }
+          if (shape instanceof RectShape || shape instanceof EllipseShape || shape instanceof ArrowShape || shape instanceof BubbleShape) {
+            if (style.fontSize !== undefined) { shape.labelFontSize = style.fontSize; }
+            if (style.fontFamily !== undefined) { shape.labelFontFamily = style.fontFamily; }
+            if (style.fontColor !== undefined) { shape.labelFontColor = style.fontColor; }
+          }
         }
         this.onChange();
         this.render();
@@ -250,7 +266,8 @@ export class CanvasEditor {
   }
 
   getCanvasSize(): { width: number; height: number } {
-    return { width: this.canvas.width, height: this.canvas.height };
+    const dpr = window.devicePixelRatio || 1;
+    return { width: this.canvas.width / dpr, height: this.canvas.height / dpr };
   }
 
   private pushUndo(): void {
@@ -415,11 +432,18 @@ export class CanvasEditor {
 
   resize(): void {
     const container = this.canvas.parentElement!;
-    this.canvas.width = container.clientWidth;
-    this.canvas.height = container.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    this.canvas.width = Math.round(w * dpr);
+    this.canvas.height = Math.round(h * dpr);
+    this.canvas.style.width = `${w}px`;
+    this.canvas.style.height = `${h}px`;
   }
 
   render(): void {
+    const dpr = window.devicePixelRatio || 1;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const preview = this.currentTool.getPreview();
     const rubberBand = this.selectTool.getRubberband();
     renderShapes(this.ctx, this.shapes, preview, this.selectedIds, rubberBand);
@@ -434,14 +458,14 @@ export class CanvasEditor {
     input.type = "text";
     input.style.position = "absolute";
     input.style.left = `${rect.left - contRect.left + pt.x}px`;
-    input.style.top = `${rect.top - contRect.top + pt.y - 16}px`;
-    input.style.fontSize = "16px";
-    input.style.fontFamily = "sans-serif";
+    input.style.top = `${rect.top - contRect.top + pt.y - style.fontSize}px`;
+    input.style.fontSize = `${style.fontSize}px`;
+    input.style.fontFamily = style.fontFamily;
     input.style.border = "1px solid #007acc";
     input.style.outline = "none";
     input.style.padding = "2px 4px";
     input.style.background = "#fff";
-    input.style.color = style.stroke;
+    input.style.color = style.fontColor;
     input.style.minWidth = "80px";
     input.style.zIndex = "10";
     container.appendChild(input);
@@ -459,7 +483,9 @@ export class CanvasEditor {
           x: pt.x,
           y: pt.y,
           text,
-          fontSize: 16,
+          fontSize: style.fontSize,
+          fontFamily: style.fontFamily,
+          fontColor: style.fontColor,
           stroke: style.stroke,
           fill: style.stroke,
           lineWidth: style.lineWidth,
@@ -534,13 +560,13 @@ export class CanvasEditor {
     input.style.left = `${canvasRect.left - contRect.left + cx - 60}px`;
     input.style.top = `${canvasRect.top - contRect.top + cy - 12}px`;
     input.style.width = "120px";
-    input.style.fontSize = `${shape.labelFontSize ?? 16}px`;
-    input.style.fontFamily = "sans-serif";
+    input.style.fontSize = `${shape.labelFontSize ?? this.style.fontSize}px`;
+    input.style.fontFamily = shape.labelFontFamily ?? this.style.fontFamily;
     input.style.border = "1px solid #007acc";
     input.style.outline = "none";
     input.style.padding = "2px 4px";
     input.style.background = "#fff";
-    input.style.color = shape.stroke;
+    input.style.color = shape.labelFontColor ?? shape.stroke;
     input.style.zIndex = "10";
     container.appendChild(input);
     input.focus();
@@ -556,7 +582,9 @@ export class CanvasEditor {
       if (nextLabel !== shape.label) {
         this.pushUndo();
         shape.label = nextLabel;
-        shape.labelFontSize = shape.labelFontSize ?? 16;
+        shape.labelFontSize = shape.labelFontSize ?? this.style.fontSize;
+        shape.labelFontFamily = shape.labelFontFamily ?? this.style.fontFamily;
+        shape.labelFontColor = shape.labelFontColor ?? this.style.fontColor;
         this.onChange();
         this.render();
       }
@@ -980,12 +1008,12 @@ export class CanvasEditor {
     input.style.left = `${rect.left - contRect.left + shape.x}px`;
     input.style.top = `${rect.top - contRect.top + shape.y - shape.fontSize}px`;
     input.style.fontSize = `${shape.fontSize}px`;
-    input.style.fontFamily = "sans-serif";
+    input.style.fontFamily = shape.fontFamily ?? "sans-serif";
     input.style.border = "1px solid #007acc";
     input.style.outline = "none";
     input.style.padding = "2px 4px";
     input.style.background = "#fff";
-    input.style.color = shape.stroke;
+    input.style.color = shape.fontColor ?? shape.stroke;
     input.style.minWidth = "80px";
     input.style.zIndex = "10";
     container.appendChild(input);

@@ -140,6 +140,9 @@ const strokeInput = document.getElementById("stroke-color") as HTMLInputElement;
 const fillInput = document.getElementById("fill-color") as HTMLInputElement;
 const lineWidthInput = document.getElementById("line-width") as HTMLInputElement;
 const borderlessInput = document.getElementById("borderless") as HTMLInputElement;
+const fontColorInput = document.getElementById("font-color") as HTMLInputElement;
+const fontSizeInput = document.getElementById("font-size") as HTMLInputElement;
+const fontFamilySelect = document.getElementById("font-family") as HTMLSelectElement;
 let lineWidthBeforeBorderless = Math.max(1, parseInt(lineWidthInput.value, 10) || DEFAULT_DRAW_STYLE.lineWidth);
 let refreshColorPalette = () => {};
 
@@ -153,14 +156,20 @@ function normalizeColorForPicker(value: string, fallback: string): string {
   return isHex ? v : fallback;
 }
 
-function applyStyleToControlsAndEditor(style: { stroke: string; fill: string; lineWidth: number }): void {
+function applyStyleToControlsAndEditor(style: { stroke: string; fill: string; lineWidth: number; fontSize?: number; fontFamily?: string; fontColor?: string }): void {
   const stroke = normalizeColorForPicker(style.stroke, DEFAULT_DRAW_STYLE.stroke);
   const fill = normalizeColorForPicker(style.fill, DEFAULT_DRAW_STYLE.fill);
   const width = Math.max(0, Math.round(style.lineWidth));
+  const fontSize = style.fontSize ?? DEFAULT_DRAW_STYLE.fontSize;
+  const fontFamily = style.fontFamily ?? DEFAULT_DRAW_STYLE.fontFamily;
+  const fontColor = normalizeColorForPicker(style.fontColor ?? DEFAULT_DRAW_STYLE.fontColor, DEFAULT_DRAW_STYLE.fontColor);
 
   strokeInput.value = stroke;
   fillInput.value = fill;
   lineWidthInput.value = String(width);
+  fontColorInput.value = fontColor;
+  fontSizeInput.value = String(fontSize);
+  fontFamilySelect.value = fontFamily;
 
   const borderless = width === 0;
   borderlessInput.checked = borderless;
@@ -169,7 +178,7 @@ function applyStyleToControlsAndEditor(style: { stroke: string; fill: string; li
     lineWidthBeforeBorderless = Math.max(1, width);
   }
 
-  editor.setCurrentStyle({ stroke, fill, lineWidth: width });
+  editor.setCurrentStyle({ stroke, fill, lineWidth: width, fontSize, fontFamily, fontColor });
   refreshColorPalette();
 }
 
@@ -262,6 +271,16 @@ borderlessInput.addEventListener("change", () => {
   lineWidthInput.value = String(restore);
   lineWidthInput.disabled = false;
   editor.setStyle({ lineWidth: restore, stroke: strokeInput.value });
+});
+fontColorInput.addEventListener("input", () => {
+  editor.setStyle({ fontColor: fontColorInput.value });
+});
+fontSizeInput.addEventListener("input", () => {
+  const next = Math.max(6, parseInt(fontSizeInput.value, 10) || DEFAULT_DRAW_STYLE.fontSize);
+  editor.setStyle({ fontSize: next });
+});
+fontFamilySelect.addEventListener("change", () => {
+  editor.setStyle({ fontFamily: fontFamilySelect.value });
 });
 
 setupColorPalette();

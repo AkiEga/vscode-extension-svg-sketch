@@ -18,7 +18,11 @@ export function renderShapes(
   selectedIds: Set<string>,
   rubberBand?: RubberBand,
 ): void {
+  // Clear full physical canvas (transform-independent)
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.restore();
 
   // Draw grid
   drawGrid(ctx);
@@ -45,7 +49,9 @@ export function renderShapes(
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D): void {
-  const { width, height } = ctx.canvas;
+  const dpr = window.devicePixelRatio || 1;
+  const width = ctx.canvas.width / dpr;
+  const height = ctx.canvas.height / dpr;
   ctx.strokeStyle = "#e8e8e8";
   ctx.lineWidth = 0.5;
   const step = 20;
@@ -114,8 +120,8 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
 
     case "text": {
       const s = shape as TextShape;
-      ctx.font = `${s.fontSize}px sans-serif`;
-      ctx.fillStyle = s.stroke; // text rendered with stroke color
+      ctx.font = `${s.fontSize}px ${s.fontFamily ?? "sans-serif"}`;
+      ctx.fillStyle = s.fontColor ?? s.stroke;
       ctx.fillText(s.text, s.x, s.y);
       break;
     }
@@ -192,14 +198,14 @@ function drawBubble(ctx: CanvasRenderingContext2D, shape: BubbleShape): void {
 
 function drawShapeLabel(
   ctx: CanvasRenderingContext2D,
-  shape: Shape & { label?: string; labelFontSize?: number; stroke: string },
+  shape: Shape & { label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; stroke: string },
   x: number,
   y: number,
 ): void {
   if (!shape.label) { return; }
   ctx.save();
-  ctx.font = `${shape.labelFontSize ?? 16}px sans-serif`;
-  ctx.fillStyle = shape.stroke;
+  ctx.font = `${shape.labelFontSize ?? 16}px ${shape.labelFontFamily ?? "sans-serif"}`;
+  ctx.fillStyle = shape.labelFontColor ?? shape.stroke;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(shape.label, x, y);
@@ -272,8 +278,8 @@ function drawTable(ctx: CanvasRenderingContext2D, shape: TableShape): void {
 
   // Cell text
   ctx.save();
-  ctx.font = `${fontSize}px sans-serif`;
-  ctx.fillStyle = shape.stroke;
+  ctx.font = `${fontSize}px ${shape.fontFamily ?? "sans-serif"}`;
+  ctx.fillStyle = shape.fontColor ?? shape.stroke;
   ctx.textBaseline = "middle";
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {

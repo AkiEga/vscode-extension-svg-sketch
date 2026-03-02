@@ -47,7 +47,9 @@ export class TextTool implements Tool {
       x: pt.x,
       y: pt.y,
       text,
-      fontSize: 16,
+      fontSize: style.fontSize,
+      fontFamily: style.fontFamily,
+      fontColor: style.fontColor,
       stroke: style.stroke,
       fill: style.stroke, // text uses stroke color as fill
       lineWidth: style.lineWidth,

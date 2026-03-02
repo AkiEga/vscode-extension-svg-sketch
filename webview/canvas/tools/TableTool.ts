@@ -64,8 +64,10 @@ export class TableTool implements Tool {
       rows: 3,
       cols: 3,
       cells: [["H1", "H2", "H3"], ["", "", ""], ["", "", ""]],
-      fontSize: 12,
       ...this.style,
+      fontSize: this.style.fontSize,
+      fontFamily: this.style.fontFamily,
+      fontColor: this.style.fontColor,
     });
   }
 
@@ -95,8 +97,10 @@ export class TableTool implements Tool {
       rows,
       cols,
       cells,
-      fontSize: 12,
       ...style,
+      fontSize: style.fontSize,
+      fontFamily: style.fontFamily,
+      fontColor: style.fontColor,
     });
   }
 }

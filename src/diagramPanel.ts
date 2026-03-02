@@ -196,6 +196,7 @@ export class DiagramPanel {
     #toolbar label { font-size: 11px; margin-left: 4px; }
     #toolbar input[type="color"] { width: 28px; height: 22px; border: none; cursor: pointer; }
     #toolbar input[type="number"] { width: 40px; padding: 2px 4px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); }
+    #toolbar select { padding: 2px 4px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); font-size: 11px; }
     #toolbar .check-inline { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
     #toolbar .check-inline input[type="checkbox"] { margin: 0; }
     #toolbar .palette-toggle {
@@ -327,6 +328,15 @@ export class DiagramPanel {
     </div>
     <label>Width</label><input type="number" id="line-width" value="2" min="0" max="20">
     <label class="check-inline"><input type="checkbox" id="borderless">No border</label>
+    <div class="separator"></div>
+    <label>Font</label><input type="color" id="font-color" value="#000000">
+    <input type="number" id="font-size" value="16" min="6" max="120" style="width:45px" title="Font size">
+    <select id="font-family" title="Font family">
+      <option value="sans-serif">Sans-serif</option>
+      <option value="serif">Serif</option>
+      <option value="monospace">Monospace</option>
+      <option value="cursive">Cursive</option>
+    </select>
     <div class="separator"></div>
     <button id="btn-undo" title="Undo (Ctrl+Z)">↶ Undo</button>
     <button id="btn-redo" title="Redo (Ctrl+Y)">↷ Redo</button>
