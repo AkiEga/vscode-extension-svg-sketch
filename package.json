@@ -114,8 +114,7 @@
     "cli": "node out/svg-sketch-cli.js",
     "serve": "node out/svg-sketch-cli.js serve",
     "test:e2e": "npx playwright test",
-    "package:vsix": "npm run build && mkdir -p release && npx @vscode/vsce package --out release/",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "package:vsix": "npm run build && npx @vscode/vsce package --out release/"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
