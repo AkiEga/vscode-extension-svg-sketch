@@ -21,6 +21,16 @@ export function activate(context: vscode.ExtensionContext) {
       await vscode.commands.executeCommand("vscode.openWith", uri, SvgEditorProvider.viewType);
     }),
   );
+
+  // Edit SVG — open an existing .svg in the custom editor
+  context.subscriptions.push(
+    vscode.commands.registerCommand("svg-sketch.editSvg", async (uri?: vscode.Uri) => {
+      // エクスプローラーの右クリックから呼ばれた場合は uri が渡される
+      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      if (!target) { return; }
+      await vscode.commands.executeCommand("vscode.openWith", target, SvgEditorProvider.viewType);
+    }),
+  );
 }
 
 export function deactivate() {}

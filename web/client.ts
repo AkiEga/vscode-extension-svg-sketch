@@ -1,63 +1,70 @@
-import { CanvasEditor } from "./canvas/CanvasEditor";
-import { DEFAULT_DRAW_STYLE, resolveDrawStyleFromShapes, rebuildDefaultDrawStyle } from "./canvas/drawStyle";
-import { reviveShapes, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape, ImageShape, applyCustomDefaults, shapeDefaults } from "./shared";
+/**
+ * web/client.ts — ブラウザ用 SVG Sketch クライアント
+ *
+ * webview/main.ts の Web スタンドアロン版。
+ * VS Code API の代わりに HTTP API + localStorage を使用。
+ */
+
+import { CanvasEditor } from "../webview/canvas/CanvasEditor";
+import { DEFAULT_DRAW_STYLE, resolveDrawStyleFromShapes } from "../webview/canvas/drawStyle";
+import { reviveShapes, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape, ImageShape, shapeDefaults } from "../webview/shared";
 import type {
   ToolType,
   DiagramData,
   Shape,
   ShapeJSON,
-  DiagramTemplateSummary,
-  WebviewToExtMessage,
-  ExtToWebviewMessage,
-} from "./shared";
+} from "../webview/shared";
 
-// VS Code webview API
-declare function acquireVsCodeApi(): {
-  postMessage(msg: unknown): void;
-  getState(): unknown;
-  setState(state: unknown): void;
-};
-
-const vscode = acquireVsCodeApi();
-
-function postMessage(msg: WebviewToExtMessage): void {
-  vscode.postMessage(msg);
+declare global {
+  interface Window {
+    __SVG_SKETCH_WEB__?: boolean;
+    __SVG_SKETCH_INITIAL_SVG__?: string;
+  }
 }
 
-interface WebviewState {
-  shapes: ShapeJSON[];
-}
-
-let screenshotPasteEnabled = true;
-let screenshotPasteMaxWidth = 1024;
-
-/** shapeDefaults 更新後に DrawStyle を再構築する */
-function rebuildDrawStyle(): void {
-  rebuildDefaultDrawStyle();
-}
-
+// --- State persistence via localStorage ---
 function saveState(shapes: Shape[]): void {
-  // Shape class instances are JSON-serializable (enumerable properties)
-  vscode.setState({ shapes: JSON.parse(JSON.stringify(shapes)) } satisfies WebviewState);
+  try {
+    localStorage.setItem("svg-sketch-state", JSON.stringify(shapes));
+  } catch { /* quota exceeded — ignore */ }
 }
 
 function restoreState(): Shape[] | undefined {
-  const state = vscode.getState() as WebviewState | undefined;
-  if (!state?.shapes) { return undefined; }
-  return reviveShapes(state.shapes);
+  const raw = localStorage.getItem("svg-sketch-state");
+  if (!raw) { return undefined; }
+  try {
+    return reviveShapes(JSON.parse(raw) as ShapeJSON[]);
+  } catch {
+    return undefined;
+  }
 }
 
-// Initialize canvas editor
+// --- Initialize canvas editor ---
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const editor = new CanvasEditor(canvas);
+const statusText = document.getElementById("status-text") as HTMLElement | null;
 
-// Restore canvas from persisted state (supports webview hide/show without retainContextWhenHidden)
-const restored = restoreState();
-if (restored) {
-  editor.setShapes(restored);
+function setStatus(text: string): void {
+  if (statusText) { statusText.textContent = text; }
 }
 
-// Persist canvas state on every mutation
+// Restore from initial SVG or localStorage
+const initialSvg = window.__SVG_SKETCH_INITIAL_SVG__ ?? "";
+if (initialSvg) {
+  const data = parseDiagramJson(initialSvg);
+  if (data) {
+    editor.setShapes(data.shapes);
+    saveState(data.shapes);
+    setStatus(`Loaded ${data.shapes.length} shapes`);
+  }
+} else {
+  const restored = restoreState();
+  if (restored) {
+    editor.setShapes(restored);
+    setStatus(`Restored ${restored.length} shapes`);
+  }
+}
+
 editor.setOnChange(() => saveState(editor.getShapes()));
 
 // --- Table editing toolbar ---
@@ -79,7 +86,6 @@ document.getElementById("btn-del-col")!.addEventListener("click", () => editor.d
 // --- Toolbar bindings ---
 const toolButtons = document.querySelectorAll<HTMLButtonElement>("#toolbar button[data-tool]");
 
-// Sync toolbar when editor auto-switches tool (e.g. after shape creation)
 editor.setOnToolChange((tool) => {
   toolButtons.forEach((b) => b.classList.remove("active"));
   document.querySelector<HTMLButtonElement>(`button[data-tool="${tool}"]`)?.classList.add("active");
@@ -92,10 +98,9 @@ toolButtons.forEach((btn) => {
   });
 });
 
-// Keyboard shortcuts for tools
+// Keyboard shortcuts
 window.addEventListener("keydown", (e) => {
-  if (e.target instanceof HTMLInputElement) { return; }
-  // Snap toggle: S key
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) { return; }
   if (e.key.toLowerCase() === "s" && !e.ctrlKey && !e.metaKey) {
     const snapBtn = document.getElementById("btn-snap") as HTMLButtonElement | null;
     const on = editor.toggleSnap();
@@ -111,20 +116,32 @@ window.addEventListener("keydown", (e) => {
     document.querySelector<HTMLButtonElement>(`button[data-tool="${tool}"]`)?.classList.add("active");
     editor.setTool(tool);
   }
+
+  // Ctrl+Z / Ctrl+Y
+  if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+    e.preventDefault();
+    editor.undo();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === "y") {
+    e.preventDefault();
+    editor.redo();
+  }
+  if (e.key === "Delete") {
+    editor.deleteSelected();
+  }
 });
 
+// Image paste
 window.addEventListener("paste", async (e) => {
-  if (!screenshotPasteEnabled) { return; }
   const items = e.clipboardData?.items;
-  if (!items || items.length === 0) { return; }
-
+  if (!items) { return; }
   for (const item of Array.from(items)) {
     if (item.type.startsWith("image/")) {
       const file = item.getAsFile();
       if (!file) { continue; }
       e.preventDefault();
       const dataUrl = await blobToDataUrl(file);
-      await editor.insertImageDataUrl(dataUrl, screenshotPasteMaxWidth);
+      await editor.insertImageDataUrl(dataUrl, 1024);
       saveState(editor.getShapes());
       return;
     }
@@ -140,7 +157,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-// Style controls
+// --- Style controls ---
 const strokeInput = document.getElementById("stroke-color") as HTMLInputElement;
 const fillInput = document.getElementById("fill-color") as HTMLInputElement;
 const lineWidthInput = document.getElementById("line-width") as HTMLInputElement;
@@ -153,8 +170,7 @@ let refreshColorPalette = () => {};
 
 function normalizeColorForPicker(value: string, fallback: string): string {
   const v = value.trim();
-  const isHex = /^#[0-9a-fA-F]{6}$/.test(v) || /^#[0-9a-fA-F]{3}$/.test(v);
-  return isHex ? v : fallback;
+  return /^#[0-9a-fA-F]{6}$/i.test(v) || /^#[0-9a-fA-F]{3}$/i.test(v) ? v : fallback;
 }
 
 function applyStyleToControlsAndEditor(style: { stroke: string; fill: string; lineWidth: number; fontSize?: number; fontFamily?: string; fontColor?: string }): void {
@@ -175,9 +191,7 @@ function applyStyleToControlsAndEditor(style: { stroke: string; fill: string; li
   const borderless = width === 0;
   borderlessInput.checked = borderless;
   lineWidthInput.disabled = borderless;
-  if (!borderless) {
-    lineWidthBeforeBorderless = Math.max(1, width);
-  }
+  if (!borderless) { lineWidthBeforeBorderless = Math.max(1, width); }
 
   editor.setCurrentStyle({ stroke, fill, lineWidth: width, fontSize, fontFamily, fontColor });
   refreshColorPalette();
@@ -190,9 +204,7 @@ function setupColorPalette(): void {
   const fillPalette = document.getElementById("palette-fill") as HTMLElement | null;
   if (!toggleBtn || !paletteBlock || !strokePalette || !fillPalette) { return; }
 
-  toggleBtn.addEventListener("click", () => {
-    paletteBlock.classList.toggle("expanded");
-  });
+  toggleBtn.addEventListener("click", () => { paletteBlock.classList.toggle("expanded"); });
 
   const strokeButtons: HTMLButtonElement[] = [];
   const fillButtons: HTMLButtonElement[] = [];
@@ -209,91 +221,61 @@ function setupColorPalette(): void {
   };
 
   for (const color of shapeDefaults.paletteColors) {
-    const strokeBtn = makeSwatch(color, (hex) => {
-      strokeInput.value = hex;
-      applyStrokeStyle();
-      refreshColorPalette();
-    });
-    strokeButtons.push(strokeBtn);
-    strokePalette.appendChild(strokeBtn);
-
-    const fillBtn = makeSwatch(color, (hex) => {
-      fillInput.value = hex;
-      editor.setStyle({ fill: hex });
-      refreshColorPalette();
-    });
-    fillButtons.push(fillBtn);
-    fillPalette.appendChild(fillBtn);
+    const sb = makeSwatch(color, (hex) => { strokeInput.value = hex; applyStrokeStyle(); refreshColorPalette(); });
+    strokeButtons.push(sb);
+    strokePalette.appendChild(sb);
+    const fb = makeSwatch(color, (hex) => { fillInput.value = hex; editor.setStyle({ fill: hex }); refreshColorPalette(); });
+    fillButtons.push(fb);
+    fillPalette.appendChild(fb);
   }
 
   refreshColorPalette = () => {
-    const stroke = strokeInput.value.toLowerCase();
-    const fill = fillInput.value.toLowerCase();
-    for (const b of strokeButtons) {
-      b.classList.toggle("active", b.dataset.color === stroke);
-    }
-    for (const b of fillButtons) {
-      b.classList.toggle("active", b.dataset.color === fill);
-    }
+    const s = strokeInput.value.toLowerCase();
+    const f = fillInput.value.toLowerCase();
+    for (const b of strokeButtons) { b.classList.toggle("active", b.dataset.color === s); }
+    for (const b of fillButtons) { b.classList.toggle("active", b.dataset.color === f); }
   };
-
   refreshColorPalette();
 }
 
-const applyStrokeStyle = (): void => {
-  editor.setStyle({ stroke: strokeInput.value });
-};
+const applyStrokeStyle = (): void => { editor.setStyle({ stroke: strokeInput.value }); };
 
 strokeInput.addEventListener("input", () => applyStrokeStyle());
-fillInput.addEventListener("input", () => {
-  editor.setStyle({ fill: fillInput.value });
-  refreshColorPalette();
-});
+fillInput.addEventListener("input", () => { editor.setStyle({ fill: fillInput.value }); refreshColorPalette(); });
 lineWidthInput.addEventListener("input", () => {
   const next = Math.max(0, parseInt(lineWidthInput.value, 10) || 0);
-  if (!borderlessInput.checked && next > 0) {
-    lineWidthBeforeBorderless = next;
-  }
+  if (!borderlessInput.checked && next > 0) { lineWidthBeforeBorderless = next; }
   editor.setStyle({ lineWidth: next });
 });
 borderlessInput.addEventListener("change", () => {
   if (borderlessInput.checked) {
     const current = Math.max(0, parseInt(lineWidthInput.value, 10) || 0);
-    if (current > 0) {
-      lineWidthBeforeBorderless = current;
-    }
+    if (current > 0) { lineWidthBeforeBorderless = current; }
     lineWidthInput.value = "0";
     lineWidthInput.disabled = true;
     editor.setStyle({ lineWidth: 0 });
     return;
   }
-
   const restore = Math.max(1, lineWidthBeforeBorderless || 2);
   lineWidthInput.value = String(restore);
   lineWidthInput.disabled = false;
   editor.setStyle({ lineWidth: restore, stroke: strokeInput.value });
 });
-fontColorInput.addEventListener("input", () => {
-  editor.setStyle({ fontColor: fontColorInput.value });
-});
+fontColorInput.addEventListener("input", () => { editor.setStyle({ fontColor: fontColorInput.value }); });
 fontSizeInput.addEventListener("input", () => {
   const next = Math.max(6, parseInt(fontSizeInput.value, 10) || DEFAULT_DRAW_STYLE.fontSize);
   editor.setStyle({ fontSize: next });
 });
-fontFamilySelect.addEventListener("change", () => {
-  editor.setStyle({ fontFamily: fontFamilySelect.value });
-});
+fontFamilySelect.addEventListener("change", () => { editor.setStyle({ fontFamily: fontFamilySelect.value }); });
 
 setupColorPalette();
-
-// Align editor style with initial controls (important for new diagrams).
 applyStyleToControlsAndEditor({
   stroke: strokeInput.value,
   fill: fillInput.value,
   lineWidth: parseInt(lineWidthInput.value, 10) || DEFAULT_DRAW_STYLE.lineWidth,
 });
 
-// Action buttons
+// --- Action buttons ---
 document.getElementById("btn-undo")!.addEventListener("click", () => editor.undo());
 document.getElementById("btn-redo")!.addEventListener("click", () => editor.redo());
 document.getElementById("btn-delete")!.addEventListener("click", () => editor.deleteSelected());
@@ -301,7 +283,6 @@ document.getElementById("btn-edit-label")!.addEventListener("click", () => edito
 document.getElementById("btn-group")!.addEventListener("click", () => editor.groupSelected());
 document.getElementById("btn-ungroup")!.addEventListener("click", () => editor.ungroupSelected());
 
-// Snap toggle
 const btnSnap = document.getElementById("btn-snap") as HTMLButtonElement | null;
 btnSnap?.classList.toggle("active", editor.snapToGrid);
 btnSnap?.addEventListener("click", () => {
@@ -309,144 +290,42 @@ btnSnap?.addEventListener("click", () => {
   btnSnap.classList.toggle("active", on);
 });
 
-document.getElementById("btn-save")!.addEventListener("click", () => {
+// Save via HTTP
+document.getElementById("btn-save")!.addEventListener("click", async () => {
   const shapes = editor.getShapes();
   const { width, height } = editor.getCanvasSize();
   const svgContent = shapesToSvgString(shapes, width, height);
-  postMessage({ command: "save", svgContent });
-});
-
-const templateNameInput = document.getElementById("template-name") as HTMLInputElement;
-const templatePanel = document.getElementById("template-panel") as HTMLElement;
-const templateList = document.getElementById("template-list") as HTMLElement;
-const btnSaveTemplate = document.getElementById("btn-save-template") as HTMLButtonElement;
-const btnSaveTemplateSvg = document.getElementById("btn-save-template-svg") as HTMLButtonElement;
-const btnToggleTemplates = document.getElementById("btn-toggle-templates") as HTMLButtonElement;
-
-let templates: DiagramTemplateSummary[] = [];
-
-btnSaveTemplate.addEventListener("click", () => {
-  const name = templateNameInput.value.trim();
-  const shapes = editor.getShapes();
-  if (!name || shapes.length === 0) {
-    return;
-  }
-  postMessage({ command: "saveTemplate", name, shapes: JSON.parse(JSON.stringify(shapes)) as ShapeJSON[] });
-});
-
-btnSaveTemplateSvg.addEventListener("click", () => {
-  const name = templateNameInput.value.trim();
-  const shapes = editor.getShapes();
-  if (!name || shapes.length === 0) {
-    return;
-  }
-  const { width, height } = editor.getCanvasSize();
-  const svgContent = shapesToSvgString(shapes, width, height);
-  postMessage({ command: "saveTemplateSvg", name, svgContent });
-});
-
-btnToggleTemplates.addEventListener("click", () => {
-  templatePanel.classList.toggle("open");
-  if (templatePanel.classList.contains("open")) {
-    postMessage({ command: "listTemplates" });
-  }
-});
-
-// --- Extension messages ---
-window.addEventListener("message", (event) => {
-  const msg = event.data as ExtToWebviewMessage;
-  switch (msg.command) {
-    case "init":
-      screenshotPasteEnabled = msg.settings?.screenshotPasteEnabled ?? true;
-      screenshotPasteMaxWidth = Math.max(128, msg.settings?.screenshotPasteMaxWidth ?? 1024);
-      // カスタム図形デフォルトを適用
-      if (msg.settings?.shapeDefaults) {
-        applyCustomDefaults(msg.settings.shapeDefaults);
-        rebuildDrawStyle();
-      }
-      if (msg.svgContent) {
-        const data = parseDiagramJson(msg.svgContent);
-        if (data) {
-          editor.setShapes(data.shapes);
-          applyStyleToControlsAndEditor(msg.settings?.defaultStyle ?? resolveDrawStyleFromShapes(data.shapes));
-          saveState(data.shapes);
-        }
-      } else {
-        editor.setShapes([]);
-        applyStyleToControlsAndEditor(msg.settings?.defaultStyle ?? DEFAULT_DRAW_STYLE);
-        saveState([]);
-      }
-      break;
-    case "load":
-      editor.setShapes(reviveShapes(msg.shapes));
-      applyStyleToControlsAndEditor(resolveDrawStyleFromShapes(editor.getShapes()));
-      saveState(editor.getShapes());
-      break;
-    case "templatesList":
-      templates = msg.templates;
-      renderTemplateList(templates);
-      break;
-    case "templatePayload":
-      editor.insertShapes(reviveShapes(msg.shapes));
-      saveState(editor.getShapes());
-      break;
-    case "templateSaved":
-      templateNameInput.value = "";
-      break;
-    case "templateDeleted":
-      templates = templates.filter((t) => t.id !== msg.templateId);
-      renderTemplateList(templates);
-      break;
-    case "error":
-      console.warn("Template error:", msg.message);
-      break;
-  }
-});
-
-// Notify extension we're ready
-postMessage({ command: "ready" });
-
-function renderTemplateList(items: DiagramTemplateSummary[]): void {
-  if (items.length === 0) {
-    templateList.innerHTML = `<div class="template-meta">No templates yet.</div>`;
-    return;
-  }
-
-  const cards: string[] = [];
-  for (const item of items) {
-    const previewSrc = `data:image/svg+xml;utf8,${encodeURIComponent(item.thumbnailSvg)}`;
-    cards.push(
-      `<article class="template-item" data-id="${item.id}">`,
-      `  <div class="template-title">${escapeHtml(item.name)}</div>`,
-      `  <div class="template-meta">${item.shapeCount} shapes</div>`,
-      `  <img class="template-preview" src="${previewSrc}" alt="${escapeHtml(item.name)} preview">`,
-      "  <div class=\"template-actions\">",
-      `    <button data-action="insert" data-id="${item.id}">Insert</button>`,
-      `    <button data-action="delete" data-id="${item.id}">Delete</button>`,
-      "  </div>",
-      "</article>",
-    );
-  }
-  templateList.innerHTML = cards.join("\n");
-
-  for (const btn of Array.from(templateList.querySelectorAll<HTMLButtonElement>("button[data-action]"))) {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.id;
-      const action = btn.dataset.action;
-      if (!id || !action) {
-        return;
-      }
-      if (action === "insert") {
-        postMessage({ command: "applyTemplate", templateId: id });
-      }
-      if (action === "delete") {
-        postMessage({ command: "deleteTemplate", templateId: id });
-      }
+  setStatus("Saving...");
+  try {
+    const res = await fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: svgContent,
     });
+    const json = await res.json() as { ok: boolean; path?: string };
+    setStatus(json.path ? `Saved: ${json.path}` : "Saved (no file specified)");
+  } catch (err) {
+    setStatus("Save failed");
+    console.error(err);
   }
-}
+});
 
-// --- SVG generation (client-side for save) ---
+// Download as file
+document.getElementById("btn-download")?.addEventListener("click", () => {
+  const shapes = editor.getShapes();
+  const { width, height } = editor.getCanvasSize();
+  const svgContent = shapesToSvgString(shapes, width, height);
+  const blob = new Blob([svgContent], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "diagram.svg";
+  a.click();
+  URL.revokeObjectURL(url);
+  setStatus("Downloaded diagram.svg");
+});
+
+// --- SVG generation ---
 function shapesToSvgString(shapes: Shape[], width: number, height: number): string {
   const diagramData: DiagramData = { version: 1, shapes };
   const dataAttr = JSON.stringify(diagramData).replace(/'/g, "&#39;");
@@ -456,7 +335,6 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
     `  data-editor="svg-sketch"`,
     `  data-diagram='${dataAttr}'>`,
   );
-
   lines.push("  <defs>");
   lines.push(
     '    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">',
@@ -473,15 +351,14 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
         const lx = shape.x + shape.width / 2;
         const ly = shape.y + shape.height / 2;
         const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
-        const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const esc = escapeXml(shape.label);
         lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
       }
     } else if (shape instanceof EllipseShape) {
       lines.push(`  <ellipse ${common} cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`);
       if (shape.label) {
         const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
-        const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+        lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
       }
     } else if (shape instanceof ArrowShape) {
       lines.push(`  <line ${common} x1="${shape.x1}" y1="${shape.y1}" x2="${shape.x2}" y2="${shape.y2}" marker-end="url(#arrowhead)" style="color:${shape.stroke}"/>`);
@@ -489,41 +366,25 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
         const lx = (shape.x1 + shape.x2) / 2;
         const ly = (shape.y1 + shape.y2) / 2 - 10;
         const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
-        const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
       }
     } else if (shape instanceof BubbleShape) {
-      const x = shape.x;
-      const y = shape.y;
-      const w = shape.width;
-      const h = shape.height;
+      const x = shape.x, y = shape.y, w = shape.width, h = shape.height;
       const tailW = Math.min(24, w * 0.25);
       const tailH = Math.min(18, h * 0.25);
       const tailX = x + w * 0.35;
-      const path = [
-        `M ${x} ${y}`,
-        `H ${x + w}`,
-        `V ${y + h}`,
-        `H ${tailX + tailW}`,
-        `L ${tailX + tailW * 0.4} ${y + h + tailH}`,
-        `L ${tailX} ${y + h}`,
-        `H ${x}`,
-        "Z",
-      ].join(" ");
+      const path = `M ${x} ${y} H ${x + w} V ${y + h} H ${tailX + tailW} L ${tailX + tailW * 0.4} ${y + h + tailH} L ${tailX} ${y + h} H ${x} Z`;
       lines.push(`  <path ${common} d="${path}"/>`);
       if (shape.label) {
         const lx = shape.x + shape.width / 2;
         const ly = shape.y + shape.height / 2;
         const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
-        const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
       }
     } else if (shape instanceof TextShape) {
-      const escaped = shape.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      lines.push(`  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="${shapeDefaults.fontFamily}">${escaped}</text>`);
+      lines.push(`  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="${shapeDefaults.fontFamily}">${escapeXml(shape.text)}</text>`);
     } else if (shape instanceof ImageShape) {
-      const href = shape.dataUrl.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
-      lines.push(`  <image ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" href="${href}" preserveAspectRatio="none"/>`);
+      lines.push(`  <image ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" href="${escapeXml(shape.dataUrl)}" preserveAspectRatio="none"/>`);
     } else if (shape instanceof TableShape) {
       const { x: tx, y: ty, width: tw, height: th, rows, cols, cells, fontSize } = shape;
       const colW = tw / cols;
@@ -541,15 +402,13 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
         for (let c = 0; c < cols; c++) {
           const t = cells[r]?.[c];
           if (t) {
-            const esc = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            lines.push(`    <text x="${tx + c * colW + 6}" y="${ty + r * rowH + rowH / 2}" font-size="${fontSize}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" dominant-baseline="central">${esc}</text>`);
+            lines.push(`    <text x="${tx + c * colW + 6}" y="${ty + r * rowH + rowH / 2}" font-size="${fontSize}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" dominant-baseline="central">${escapeXml(t)}</text>`);
           }
         }
       }
       lines.push("  </g>");
     }
   }
-
   lines.push("</svg>");
   return lines.join("\n");
 }
@@ -566,11 +425,10 @@ function parseDiagramJson(svgContent: string): DiagramData | undefined {
   }
 }
 
-function escapeHtml(text: string): string {
+function escapeXml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(/"/g, "&quot;");
 }

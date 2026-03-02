@@ -12,13 +12,40 @@
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
+  "bin": {
+    "svg-sketch-cli": "./out/svg-sketch-cli.js"
+  },
   "contributes": {
     "commands": [
       {
         "command": "svg-sketch.newDiagram",
         "title": "SVG Sketch: New SVG"
+      },
+      {
+        "command": "svg-sketch.editSvg",
+        "title": "SVG Sketch: Edit SVG"
       }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "svg-sketch.newDiagram",
+          "group": "svgSketch@1"
+        },
+        {
+          "command": "svg-sketch.editSvg",
+          "when": "resourceExtname == .svg",
+          "group": "svgSketch@2"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "svg-sketch.editSvg",
+          "when": "resourceExtname == .svg",
+          "group": "svgSketch@1"
+        }
+      ]
+    },
     "configuration": {
       "title": "SVG Sketch",
       "properties": {
@@ -83,9 +110,13 @@
     "compile": "tsc -p ./",
     "lint": "eslint src/ webview/ --ext ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "cli": "node out/svg-sketch-cli.js",
+    "serve": "node out/svg-sketch-cli.js serve",
+    "test:e2e": "npx playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.86.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",

@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "out/cli",
+    "rootDir": "..",
+    "declaration": false,
+    "sourceMap": true
+  },
+  "include": [
+    "./**/*.ts",
+    "../src/types.ts",
+    "../src/svgExporter.ts",
+    "../src/shapeConfig.ts"
+  ]
+}
