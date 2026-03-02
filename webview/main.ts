@@ -141,6 +141,11 @@ const fillInput = document.getElementById("fill-color") as HTMLInputElement;
 const lineWidthInput = document.getElementById("line-width") as HTMLInputElement;
 const borderlessInput = document.getElementById("borderless") as HTMLInputElement;
 let lineWidthBeforeBorderless = Math.max(1, parseInt(lineWidthInput.value, 10) || DEFAULT_DRAW_STYLE.lineWidth);
+let refreshColorPalette = () => {};
+
+const PALETTE_COLORS: string[] = [
+  "#000000", "#ffffff", "#ef4444", "#f97316", "#f59e0b", "#22c55e", "#0ea5e9", "#3b82f6", "#6366f1", "#ec4899",
+];
 
 function normalizeColorForPicker(value: string, fallback: string): string {
   const v = value.trim();
@@ -165,6 +170,64 @@ function applyStyleToControlsAndEditor(style: { stroke: string; fill: string; li
   }
 
   editor.setCurrentStyle({ stroke, fill, lineWidth: width });
+  refreshColorPalette();
+}
+
+function setupColorPalette(): void {
+  const toggleBtn = document.getElementById("palette-toggle") as HTMLElement | null;
+  const paletteBlock = document.getElementById("palette-block") as HTMLElement | null;
+  const strokePalette = document.getElementById("palette-stroke") as HTMLElement | null;
+  const fillPalette = document.getElementById("palette-fill") as HTMLElement | null;
+  if (!toggleBtn || !paletteBlock || !strokePalette || !fillPalette) { return; }
+
+  toggleBtn.addEventListener("click", () => {
+    paletteBlock.classList.toggle("expanded");
+  });
+
+  const strokeButtons: HTMLButtonElement[] = [];
+  const fillButtons: HTMLButtonElement[] = [];
+
+  const makeSwatch = (color: string, onPick: (hex: string) => void): HTMLButtonElement => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "palette-swatch";
+    btn.dataset.color = color.toLowerCase();
+    btn.title = color;
+    btn.style.background = color;
+    btn.addEventListener("click", () => onPick(color));
+    return btn;
+  };
+
+  for (const color of PALETTE_COLORS) {
+    const strokeBtn = makeSwatch(color, (hex) => {
+      strokeInput.value = hex;
+      applyStrokeStyle();
+      refreshColorPalette();
+    });
+    strokeButtons.push(strokeBtn);
+    strokePalette.appendChild(strokeBtn);
+
+    const fillBtn = makeSwatch(color, (hex) => {
+      fillInput.value = hex;
+      editor.setStyle({ fill: hex });
+      refreshColorPalette();
+    });
+    fillButtons.push(fillBtn);
+    fillPalette.appendChild(fillBtn);
+  }
+
+  refreshColorPalette = () => {
+    const stroke = strokeInput.value.toLowerCase();
+    const fill = fillInput.value.toLowerCase();
+    for (const b of strokeButtons) {
+      b.classList.toggle("active", b.dataset.color === stroke);
+    }
+    for (const b of fillButtons) {
+      b.classList.toggle("active", b.dataset.color === fill);
+    }
+  };
+
+  refreshColorPalette();
 }
 
 const applyStrokeStyle = (): void => {
@@ -172,7 +235,10 @@ const applyStrokeStyle = (): void => {
 };
 
 strokeInput.addEventListener("input", () => applyStrokeStyle());
-fillInput.addEventListener("input", () => editor.setStyle({ fill: fillInput.value }));
+fillInput.addEventListener("input", () => {
+  editor.setStyle({ fill: fillInput.value });
+  refreshColorPalette();
+});
 lineWidthInput.addEventListener("input", () => {
   const next = Math.max(0, parseInt(lineWidthInput.value, 10) || 0);
   if (!borderlessInput.checked && next > 0) {
@@ -197,6 +263,8 @@ borderlessInput.addEventListener("change", () => {
   lineWidthInput.disabled = false;
   editor.setStyle({ lineWidth: restore, stroke: strokeInput.value });
 });
+
+setupColorPalette();
 
 // Align editor style with initial controls (important for new diagrams).
 applyStyleToControlsAndEditor({

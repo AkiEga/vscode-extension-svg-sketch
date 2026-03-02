@@ -191,6 +191,25 @@ export class SvgEditorProvider implements vscode.CustomTextEditorProvider {
     #toolbar input[type="number"] { width: 40px; padding: 2px 4px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); }
     #toolbar .check-inline { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
     #toolbar .check-inline input[type="checkbox"] { margin: 0; }
+    #toolbar .palette-toggle {
+      margin-left: 6px; font-size: 13px; padding: 2px 6px; cursor: pointer;
+      background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);
+      border: 1px solid var(--vscode-button-border, transparent); border-radius: 3px;
+    }
+    #toolbar .palette-toggle:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    #toolbar .palette-block { display: none; align-items: center; gap: 4px; margin-left: 4px; }
+    #toolbar .palette-block.expanded { display: inline-flex; }
+    #toolbar .palette-label { font-size: 10px; opacity: 0.85; margin: 0 2px 0 4px; }
+    #toolbar .palette-swatches { display: inline-flex; align-items: center; gap: 3px; }
+    #toolbar .palette-swatch {
+      width: 14px; height: 14px; border-radius: 999px; padding: 0;
+      border: 1px solid var(--vscode-panel-border);
+      min-width: 14px;
+    }
+    #toolbar .palette-swatch.active {
+      outline: 2px solid var(--vscode-focusBorder, #007acc);
+      outline-offset: 1px;
+    }
 
     #canvas-container { flex: 1; overflow: hidden; position: relative; }
     #canvas { display: block; background: #ffffff; cursor: crosshair; }
@@ -272,6 +291,11 @@ export class SvgEditorProvider implements vscode.CustomTextEditorProvider {
     <div class="separator"></div>
     <label>Stroke</label><input type="color" id="stroke-color" value="#000000">
     <label>Fill</label><input type="color" id="fill-color" value="#ffffff">
+    <button id="palette-toggle" class="palette-toggle" title="Toggle Palette">🎨</button>
+    <div id="palette-block" class="palette-block">
+      <span class="palette-label">S</span><div id="palette-stroke" class="palette-swatches"></div>
+      <span class="palette-label">F</span><div id="palette-fill" class="palette-swatches"></div>
+    </div>
     <label>Width</label><input type="number" id="line-width" value="2" min="0" max="20">
     <label class="check-inline"><input type="checkbox" id="borderless">No border</label>
     <div class="separator"></div>
