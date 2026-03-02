@@ -1,4 +1,5 @@
-import { type Shape, type DiagramData, type ShapeJSON, TableShape, reviveShapes } from "./types";
+import { type Shape, type ConcreteShape, type DiagramData, type ShapeJSON, TableShape, reviveShapes } from "./types";
+import { shapeDefaults } from "./shapeConfig";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -20,7 +21,7 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
   );
   lines.push("  </defs>");
 
-  for (const shape of shapes) {
+  for (const shape of shapes as ConcreteShape[]) {
     const common = `data-shape-id="${shape.id}" stroke="${shape.stroke}" fill="${shape.fill}" stroke-width="${shape.lineWidth}"`;
     switch (shape.type) {
       case "rect":
@@ -30,8 +31,8 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
         if (shape.label) {
           const lx = shape.x + shape.width / 2;
           const ly = shape.y + shape.height / 2;
-          const fs = shape.labelFontSize ?? 16;
-          const ff = shape.labelFontFamily ?? "sans-serif";
+          const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
+          const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
           lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
         }
@@ -41,8 +42,8 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
           `  <ellipse ${common} cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`
         );
         if (shape.label) {
-          const fs = shape.labelFontSize ?? 16;
-          const ff = shape.labelFontFamily ?? "sans-serif";
+          const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
+          const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
           lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
         }
@@ -54,8 +55,8 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
         if (shape.label) {
           const lx = (shape.x1 + shape.x2) / 2;
           const ly = (shape.y1 + shape.y2) / 2 - 10;
-          const fs = shape.labelFontSize ?? 16;
-          const ff = shape.labelFontFamily ?? "sans-serif";
+          const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
+          const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
           lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
         }
@@ -82,8 +83,8 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
         if (shape.label) {
           const lx = shape.x + shape.width / 2;
           const ly = shape.y + shape.height / 2;
-          const fs = shape.labelFontSize ?? 16;
-          const ff = shape.labelFontFamily ?? "sans-serif";
+          const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
+          const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
           lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
         }
@@ -91,7 +92,7 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
       }
       case "text":
         lines.push(
-          `  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="${shape.fontFamily ?? "sans-serif"}" fill="${shape.fontColor ?? shape.stroke}">${escapeXml(shape.text)}</text>`
+          `  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="${shape.fontFamily ?? shapeDefaults.fontFamily}" fill="${shape.fontColor ?? shape.stroke}">${escapeXml(shape.text)}</text>`
         );
         break;
       case "table":
@@ -132,7 +133,7 @@ function renderTableSvg(shape: TableShape, common: string): string[] {
   // Background
   lines.push(`    <rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${shape.fill}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
   // Header background
-  lines.push(`    <rect x="${x}" y="${y}" width="${width}" height="${rowH}" fill="#e5e7eb" stroke="none"/>`);
+  lines.push(`    <rect x="${x}" y="${y}" width="${width}" height="${rowH}" fill="${shapeDefaults.tableHeaderBg}" stroke="none"/>`);
   // Grid lines
   for (let r = 1; r < rows; r++) {
     lines.push(`    <line x1="${x}" y1="${y + r * rowH}" x2="${x + width}" y2="${y + r * rowH}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
@@ -147,7 +148,7 @@ function renderTableSvg(shape: TableShape, common: string): string[] {
       if (text) {
         const tx = x + c * colW + 6;
         const ty = y + r * rowH + rowH / 2;
-        lines.push(`    <text x="${tx}" y="${ty}" font-size="${fontSize}" font-family="${shape.fontFamily ?? "sans-serif"}" fill="${shape.fontColor ?? shape.stroke}" dominant-baseline="central">${escapeXml(text)}</text>`);
+        lines.push(`    <text x="${tx}" y="${ty}" font-size="${fontSize}" font-family="${shape.fontFamily ?? shapeDefaults.fontFamily}" fill="${shape.fontColor ?? shape.stroke}" dominant-baseline="central">${escapeXml(text)}</text>`);
       }
     }
   }

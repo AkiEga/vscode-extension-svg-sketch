@@ -14,6 +14,7 @@ const extensionConfig = {
   sourcemap: !isProduction,
   minify: isProduction,
   target: "node20",
+  loader: { ".svg": "text" },
 };
 
 /** @type {esbuild.BuildOptions} */
@@ -26,6 +27,7 @@ const webviewConfig = {
   sourcemap: !isProduction,
   minify: isProduction,
   target: "es2022",
+  loader: { ".svg": "text" },
 };
 
 async function main() {

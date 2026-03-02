@@ -1,13 +1,24 @@
 import type { DrawStyle, Shape } from "../shared";
+import { shapeDefaults } from "../shared";
 
 export const DEFAULT_DRAW_STYLE: DrawStyle = {
-  stroke: "#000000",
-  fill: "#ffffff",
-  lineWidth: 2,
-  fontSize: 16,
-  fontFamily: "sans-serif",
-  fontColor: "#000000",
+  stroke: shapeDefaults.stroke,
+  fill: shapeDefaults.fill,
+  lineWidth: shapeDefaults.lineWidth,
+  fontSize: shapeDefaults.fontSize,
+  fontFamily: shapeDefaults.fontFamily,
+  fontColor: shapeDefaults.fontColor,
 };
+
+/** shapeDefaults が更新された後に DEFAULT_DRAW_STYLE を再構築する */
+export function rebuildDefaultDrawStyle(): void {
+  DEFAULT_DRAW_STYLE.stroke = shapeDefaults.stroke;
+  DEFAULT_DRAW_STYLE.fill = shapeDefaults.fill;
+  DEFAULT_DRAW_STYLE.lineWidth = shapeDefaults.lineWidth;
+  DEFAULT_DRAW_STYLE.fontSize = shapeDefaults.fontSize;
+  DEFAULT_DRAW_STYLE.fontFamily = shapeDefaults.fontFamily;
+  DEFAULT_DRAW_STYLE.fontColor = shapeDefaults.fontColor;
+}
 
 function isColorToken(value: string | undefined): value is string {
   if (!value) { return false; }

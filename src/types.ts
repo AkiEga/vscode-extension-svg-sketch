@@ -447,6 +447,9 @@ function distToSegment(p: Point, a: Point, b: Point): number {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
+/** Concrete shape union — switch(shape.type) で型絞り込み可能 */
+export type ConcreteShape = RectShape | EllipseShape | ArrowShape | BubbleShape | TextShape | TableShape | ImageShape;
+
 /** Plain-object shape representation (for JSON deserialization) */
 export type ShapeJSON =
   | { type: "rect"; id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }
@@ -478,6 +481,17 @@ export interface EditorSettings {
   };
   screenshotPasteEnabled?: boolean;
   screenshotPasteMaxWidth?: number;
+  /** カスタム SVG から読み取った図形デフォルト設定 */
+  shapeDefaults?: {
+    stroke: string;
+    fill: string;
+    lineWidth: number;
+    fontSize: number;
+    fontFamily: string;
+    fontColor: string;
+    tableHeaderBg: string;
+    paletteColors: readonly string[];
+  };
 }
 
 /** Reconstruct Shape instances from an array of plain JSON objects */

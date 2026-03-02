@@ -36,6 +36,22 @@ export {
   reviveShape,
   reviveShapes,
 };
+
+// Re-export shape configuration constants
+export {
+  DEFAULT_STROKE,
+  DEFAULT_FILL,
+  DEFAULT_LINE_WIDTH,
+  DEFAULT_FONT_SIZE,
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_COLOR,
+  TABLE_HEADER_BG,
+  PALETTE_COLORS,
+  shapeDefaults,
+  applyCustomDefaults,
+  parseShapeDefaultsSvg,
+} from "../src/shapeConfig";
+export type { ShapeDefaults } from "../src/shapeConfig";
 export type {
   ShapeType,
   ShapeJSON,

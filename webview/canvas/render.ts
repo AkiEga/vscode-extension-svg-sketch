@@ -1,5 +1,6 @@
 import { Shape, RectShape, EllipseShape, ArrowShape, TableShape, BubbleShape, TextShape, ImageShape } from "../shared";
 import type { Point } from "../shared";
+import { shapeDefaults } from "../shared";
 import { getShapeHandles } from "./tools/SelectTool";
 import type { RubberBand } from "./tools/SelectTool";
 
@@ -120,7 +121,7 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
 
     case "text": {
       const s = shape as TextShape;
-      ctx.font = `${s.fontSize}px ${s.fontFamily ?? "sans-serif"}`;
+      ctx.font = `${s.fontSize}px ${s.fontFamily ?? shapeDefaults.fontFamily}`;
       ctx.fillStyle = s.fontColor ?? s.stroke;
       ctx.fillText(s.text, s.x, s.y);
       break;
@@ -204,7 +205,7 @@ function drawShapeLabel(
 ): void {
   if (!shape.label) { return; }
   ctx.save();
-  ctx.font = `${shape.labelFontSize ?? 16}px ${shape.labelFontFamily ?? "sans-serif"}`;
+  ctx.font = `${shape.labelFontSize ?? shapeDefaults.fontSize}px ${shape.labelFontFamily ?? shapeDefaults.fontFamily}`;
   ctx.fillStyle = shape.labelFontColor ?? shape.stroke;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -256,7 +257,7 @@ function drawTable(ctx: CanvasRenderingContext2D, shape: TableShape): void {
 
   // Header row background
   ctx.save();
-  ctx.fillStyle = "#e5e7eb";
+  ctx.fillStyle = shapeDefaults.tableHeaderBg;
   ctx.fillRect(x, y, width, rowH);
   ctx.restore();
 
@@ -278,7 +279,7 @@ function drawTable(ctx: CanvasRenderingContext2D, shape: TableShape): void {
 
   // Cell text
   ctx.save();
-  ctx.font = `${fontSize}px ${shape.fontFamily ?? "sans-serif"}`;
+  ctx.font = `${fontSize}px ${shape.fontFamily ?? shapeDefaults.fontFamily}`;
   ctx.fillStyle = shape.fontColor ?? shape.stroke;
   ctx.textBaseline = "middle";
   for (let r = 0; r < rows; r++) {

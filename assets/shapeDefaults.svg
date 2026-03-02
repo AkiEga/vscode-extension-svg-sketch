@@ -1,0 +1,41 @@
+<!--
+  SVG Sketch デフォルト図形設定ファイル
+  このファイルの属性値を変更すると、エディタの図形デフォルト設定が変わります。
+
+  - #default-shape:  stroke / fill / stroke-width のデフォルト
+  - #default-text:   font-size / font-family / fill (=fontColor) のデフォルト
+  - #table-header:   fill がテーブルヘッダー背景色
+  - #palette > rect:  カラーパレットの各色 (fill)
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" data-editor="svg-sketch-defaults">
+
+  <!-- デフォルト図形スタイル -->
+  <rect id="default-shape"
+    x="10" y="10" width="80" height="50"
+    stroke="#000000" fill="#ffffff" stroke-width="2"/>
+
+  <!-- デフォルトテキストスタイル -->
+  <text id="default-text"
+    x="10" y="90"
+    font-size="16" font-family="sans-serif" fill="#000000">Sample</text>
+
+  <!-- テーブルヘッダー背景色 -->
+  <rect id="table-header"
+    x="10" y="110" width="80" height="20"
+    fill="#e5e7eb" stroke="none"/>
+
+  <!-- カラーパレット -->
+  <g id="palette">
+    <rect x="10"  y="150" width="14" height="14" fill="#000000"/>
+    <rect x="30"  y="150" width="14" height="14" fill="#ffffff"/>
+    <rect x="50"  y="150" width="14" height="14" fill="#ef4444"/>
+    <rect x="70"  y="150" width="14" height="14" fill="#f97316"/>
+    <rect x="90"  y="150" width="14" height="14" fill="#f59e0b"/>
+    <rect x="110" y="150" width="14" height="14" fill="#22c55e"/>
+    <rect x="130" y="150" width="14" height="14" fill="#0ea5e9"/>
+    <rect x="150" y="150" width="14" height="14" fill="#3b82f6"/>
+    <rect x="170" y="150" width="14" height="14" fill="#6366f1"/>
+    <rect x="190" y="150" width="14" height="14" fill="#ec4899"/>
+  </g>
+
+</svg>

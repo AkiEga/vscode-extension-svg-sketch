@@ -22,6 +22,11 @@
     "configuration": {
       "title": "SVG Sketch",
       "properties": {
+        "svg-sketch.shapeDefaultsSvgPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a custom SVG file that defines default shape styles. Leave empty to use the built-in defaults. The SVG must follow the same format as the bundled shapeDefaults.svg."
+        },
         "svg-sketch.templateDir": {
           "type": "string",
           "default": ".svg-sketch/templates",

@@ -8,6 +8,7 @@ import {
   deleteTemplate,
 } from "./fileUtils";
 import { getEditorSettings } from "./settings";
+import { shapeDefaults } from "./shapeConfig";
 
 /**
  * Custom text editor provider that opens .svg files directly in the
@@ -290,20 +291,20 @@ export class SvgEditorProvider implements vscode.CustomTextEditorProvider {
     <button data-tool="bubble" title="Speech Bubble (B)">💬 Bubble</button>
     <button data-tool="table" title="Table (G)">⊞ Table</button>
     <div class="separator"></div>
-    <label>Stroke</label><input type="color" id="stroke-color" value="#000000">
-    <label>Fill</label><input type="color" id="fill-color" value="#ffffff">
+    <label>Stroke</label><input type="color" id="stroke-color" value="${shapeDefaults.stroke}">
+    <label>Fill</label><input type="color" id="fill-color" value="${shapeDefaults.fill}">
     <button id="palette-toggle" class="palette-toggle" title="Toggle Palette">🎨</button>
     <div id="palette-block" class="palette-block">
       <span class="palette-label">S</span><div id="palette-stroke" class="palette-swatches"></div>
       <span class="palette-label">F</span><div id="palette-fill" class="palette-swatches"></div>
     </div>
-    <label>Width</label><input type="number" id="line-width" value="2" min="0" max="20">
+    <label>Width</label><input type="number" id="line-width" value="${shapeDefaults.lineWidth}" min="0" max="20">
     <label class="check-inline"><input type="checkbox" id="borderless">No border</label>
     <div class="separator"></div>
-    <label>Font</label><input type="color" id="font-color" value="#000000">
-    <input type="number" id="font-size" value="16" min="6" max="120" style="width:45px" title="Font size">
+    <label>Font</label><input type="color" id="font-color" value="${shapeDefaults.fontColor}">
+    <input type="number" id="font-size" value="${shapeDefaults.fontSize}" min="6" max="120" style="width:45px" title="Font size">
     <select id="font-family" title="Font family">
-      <option value="sans-serif">Sans-serif</option>
+      <option value="${shapeDefaults.fontFamily}">Sans-serif</option>
       <option value="serif">Serif</option>
       <option value="monospace">Monospace</option>
       <option value="cursive">Cursive</option>

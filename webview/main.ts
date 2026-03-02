@@ -1,6 +1,6 @@
 import { CanvasEditor } from "./canvas/CanvasEditor";
-import { DEFAULT_DRAW_STYLE, resolveDrawStyleFromShapes } from "./canvas/drawStyle";
-import { reviveShapes, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape, ImageShape } from "./shared";
+import { DEFAULT_DRAW_STYLE, resolveDrawStyleFromShapes, rebuildDefaultDrawStyle } from "./canvas/drawStyle";
+import { reviveShapes, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape, ImageShape, applyCustomDefaults, shapeDefaults } from "./shared";
 import type {
   ToolType,
   DiagramData,
@@ -30,6 +30,11 @@ interface WebviewState {
 
 let screenshotPasteEnabled = true;
 let screenshotPasteMaxWidth = 1024;
+
+/** shapeDefaults 更新後に DrawStyle を再構築する */
+function rebuildDrawStyle(): void {
+  rebuildDefaultDrawStyle();
+}
 
 function saveState(shapes: Shape[]): void {
   // Shape class instances are JSON-serializable (enumerable properties)
@@ -146,10 +151,6 @@ const fontFamilySelect = document.getElementById("font-family") as HTMLSelectEle
 let lineWidthBeforeBorderless = Math.max(1, parseInt(lineWidthInput.value, 10) || DEFAULT_DRAW_STYLE.lineWidth);
 let refreshColorPalette = () => {};
 
-const PALETTE_COLORS: string[] = [
-  "#000000", "#ffffff", "#ef4444", "#f97316", "#f59e0b", "#22c55e", "#0ea5e9", "#3b82f6", "#6366f1", "#ec4899",
-];
-
 function normalizeColorForPicker(value: string, fallback: string): string {
   const v = value.trim();
   const isHex = /^#[0-9a-fA-F]{6}$/.test(v) || /^#[0-9a-fA-F]{3}$/.test(v);
@@ -207,7 +208,7 @@ function setupColorPalette(): void {
     return btn;
   };
 
-  for (const color of PALETTE_COLORS) {
+  for (const color of shapeDefaults.paletteColors) {
     const strokeBtn = makeSwatch(color, (hex) => {
       strokeInput.value = hex;
       applyStrokeStyle();
@@ -358,6 +359,11 @@ window.addEventListener("message", (event) => {
     case "init":
       screenshotPasteEnabled = msg.settings?.screenshotPasteEnabled ?? true;
       screenshotPasteMaxWidth = Math.max(128, msg.settings?.screenshotPasteMaxWidth ?? 1024);
+      // カスタム図形デフォルトを適用
+      if (msg.settings?.shapeDefaults) {
+        applyCustomDefaults(msg.settings.shapeDefaults);
+        rebuildDrawStyle();
+      }
       if (msg.svgContent) {
         const data = parseDiagramJson(msg.svgContent);
         if (data) {
@@ -466,25 +472,25 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
       if (shape.label) {
         const lx = shape.x + shape.width / 2;
         const ly = shape.y + shape.height / 2;
-        const fs = shape.labelFontSize ?? 16;
+        const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
         const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
       }
     } else if (shape instanceof EllipseShape) {
       lines.push(`  <ellipse ${common} cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`);
       if (shape.label) {
-        const fs = shape.labelFontSize ?? 16;
+        const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
         const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+        lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
       }
     } else if (shape instanceof ArrowShape) {
       lines.push(`  <line ${common} x1="${shape.x1}" y1="${shape.y1}" x2="${shape.x2}" y2="${shape.y2}" marker-end="url(#arrowhead)" style="color:${shape.stroke}"/>`);
       if (shape.label) {
         const lx = (shape.x1 + shape.x2) / 2;
         const ly = (shape.y1 + shape.y2) / 2 - 10;
-        const fs = shape.labelFontSize ?? 16;
+        const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
         const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
       }
     } else if (shape instanceof BubbleShape) {
       const x = shape.x;
@@ -508,13 +514,13 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
       if (shape.label) {
         const lx = shape.x + shape.width / 2;
         const ly = shape.y + shape.height / 2;
-        const fs = shape.labelFontSize ?? 16;
+        const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
         const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="sans-serif" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
       }
     } else if (shape instanceof TextShape) {
       const escaped = shape.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      lines.push(`  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="sans-serif">${escaped}</text>`);
+      lines.push(`  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="${shapeDefaults.fontFamily}">${escaped}</text>`);
     } else if (shape instanceof ImageShape) {
       const href = shape.dataUrl.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
       lines.push(`  <image ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" href="${href}" preserveAspectRatio="none"/>`);
@@ -524,7 +530,7 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
       const rowH = th / rows;
       lines.push(`  <g ${common} data-table-rows="${rows}" data-table-cols="${cols}">`);
       lines.push(`    <rect x="${tx}" y="${ty}" width="${tw}" height="${th}" fill="${shape.fill}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
-      lines.push(`    <rect x="${tx}" y="${ty}" width="${tw}" height="${rowH}" fill="#e5e7eb" stroke="none"/>`);
+      lines.push(`    <rect x="${tx}" y="${ty}" width="${tw}" height="${rowH}" fill="${shapeDefaults.tableHeaderBg}" stroke="none"/>`);
       for (let r = 1; r < rows; r++) {
         lines.push(`    <line x1="${tx}" y1="${ty + r * rowH}" x2="${tx + tw}" y2="${ty + r * rowH}" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}"/>`);
       }
@@ -536,7 +542,7 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
           const t = cells[r]?.[c];
           if (t) {
             const esc = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            lines.push(`    <text x="${tx + c * colW + 6}" y="${ty + r * rowH + rowH / 2}" font-size="${fontSize}" font-family="sans-serif" fill="${shape.stroke}" dominant-baseline="central">${esc}</text>`);
+            lines.push(`    <text x="${tx + c * colW + 6}" y="${ty + r * rowH + rowH / 2}" font-size="${fontSize}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" dominant-baseline="central">${esc}</text>`);
           }
         }
       }
