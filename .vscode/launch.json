@@ -17,6 +17,18 @@
             ],
             "sourceMaps": true,
             "preLaunchTask": "${defaultBuildTask}"
+        },
+        {
+            "name": "Launch Web Server",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/out/svg-sketch-cli.js",
+            "args": ["serve", "--port", "3000"],
+            "sourceMaps": true,
+            "outFiles": ["${workspaceFolder}/out/**/*.js"],
+            "preLaunchTask": "${defaultBuildTask}",
+            "console": "integratedTerminal",
+            "skipFiles": ["<node_internals>/**"]
         }
     ]
 }
