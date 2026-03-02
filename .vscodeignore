@@ -1,11 +1,37 @@
-.vscode
-.vscode-test
-out
-out-webview
-node_modules
-src
-webview
+.vscode/**
+.vscode-test/**
+.github/**
+.git/**
+.gitignore
+node_modules/**
+
+# ソース (バンドル後は不要)
+src/**
+webview/**
+cli/**
+web/**
+
+# ビルド設定
 tsconfig.json
 tsconfig.webview.json
 esbuild.mjs
 .eslintrc.json
+vitest.config.ts
+playwright.config.ts
+
+# テスト
+test/**
+e2e/**
+test-workspace/**
+test-results/**
+playwright-report/**
+
+# リリース成果物 (拡張機能パッケージ自体には含めない)
+release/**
+
+# ドキュメント・メタ
+AGENTS.md
+
+# out/ の中でも拡張機能に不要なもの
+out/svg-sketch-cli.js
+out/web-client.js
