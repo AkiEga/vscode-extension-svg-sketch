@@ -338,6 +338,26 @@ export class CanvasEditor {
       if ((e.key === "Delete" || e.key === "Backspace") && this.selectedIds.size > 0) {
         this.deleteSelected();
       }
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) && this.selectedIds.size > 0) {
+        e.preventDefault();
+        const step = e.ctrlKey ? 1 : 20;
+        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+        // キー長押し時の auto-repeat では pushUndo しない（1操作 = 1アンドゥ）
+        if (!e.repeat) { this.pushUndo(); }
+        for (const shape of this.shapes.filter((s) => this.selectedIds.has(s.id))) {
+          if (shape instanceof ArrowShape) {
+            shape.x1 += dx; shape.y1 += dy;
+            shape.x2 += dx; shape.y2 += dy;
+          } else if (shape instanceof EllipseShape) {
+            shape.cx += dx; shape.cy += dy;
+          } else if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TextShape || shape instanceof TableShape || shape instanceof ImageShape) {
+            shape.x += dx; shape.y += dy;
+          }
+        }
+        this.onChange();
+        this.render();
+      }
       if (e.ctrlKey && e.key === "z") {
         e.preventDefault();
         this.undo();
