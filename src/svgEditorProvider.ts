@@ -279,6 +279,28 @@ export class SvgEditorProvider implements vscode.CustomTextEditorProvider {
       border-radius: 3px; font-size: 12px;
     }
     #table-toolbar button:hover { background: var(--vscode-button-secondaryHoverBackground); }
+
+    .ctx-menu {
+      position: absolute;
+      z-index: 30;
+      background: var(--vscode-menu-background, var(--vscode-editorWidget-background, #fff));
+      color: var(--vscode-menu-foreground, var(--vscode-editor-foreground, #000));
+      border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, #ccc));
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      padding: 4px 0;
+      min-width: 140px;
+      font-size: 12px;
+    }
+    .ctx-menu-item {
+      padding: 4px 16px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .ctx-menu-item:hover {
+      background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground, #094771));
+      color: var(--vscode-menu-selectionForeground, var(--vscode-list-hoverForeground, #fff));
+    }
   </style>
 </head>
 <body>
@@ -312,12 +334,10 @@ export class SvgEditorProvider implements vscode.CustomTextEditorProvider {
     <div class="separator"></div>
     <button id="btn-undo" title="Undo (Ctrl+Z)">↶ Undo</button>
     <button id="btn-redo" title="Redo (Ctrl+Y)">↷ Redo</button>
-    <button id="btn-delete" title="Delete selected (Del)">🗑 Delete</button>
-    <button id="btn-edit-label" title="Edit selected label (F2)">✎ Label</button>
-    <button id="btn-group" title="Group selected (Ctrl+G)">Group</button>
-    <button id="btn-ungroup" title="Ungroup selected (Ctrl+Shift+G)">Ungroup</button>
-    <button id="btn-snap" title="Grid Snap (S)">⊞ Snap</button>
+    <button id="btn-group" title="Group selected (Ctrl+Shift+G)">Group</button>
+    <button id="btn-ungroup" title="Ungroup selected (Ctrl+U)">Ungroup</button>
     <div class="row-break"></div>
+    <button id="btn-style" title="Render style (H): Plain → Sketch → Pencil">🖊 Style: Plain</button>
     <div class="separator"></div>
     <input id="template-name" type="text" placeholder="Template name">
     <button id="btn-save-template" title="Save current diagram as template">Save Template</button>
