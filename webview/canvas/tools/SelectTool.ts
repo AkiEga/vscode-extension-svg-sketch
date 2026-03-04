@@ -200,9 +200,11 @@ export class SelectTool implements Tool {
     }
 
     const h = getShapeHandles(shape);
+    // Rect, Ellipse, Bubble use only TL/BR handles; others use all 4
+    const tlBrOnly = shape instanceof RectShape || shape instanceof EllipseShape || shape instanceof BubbleShape;
     if (nearPoint(pt, h.tl, HANDLE_TOLERANCE)) { return "tl"; }
-    if (nearPoint(pt, h.tr, HANDLE_TOLERANCE)) { return "tr"; }
-    if (nearPoint(pt, h.bl, HANDLE_TOLERANCE)) { return "bl"; }
+    if (!tlBrOnly && nearPoint(pt, h.tr, HANDLE_TOLERANCE)) { return "tr"; }
+    if (!tlBrOnly && nearPoint(pt, h.bl, HANDLE_TOLERANCE)) { return "bl"; }
     if (nearPoint(pt, h.br, HANDLE_TOLERANCE)) { return "br"; }
     return undefined;
   }

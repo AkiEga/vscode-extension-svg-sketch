@@ -326,8 +326,8 @@ describe("SelectTool – handle resize", () => {
     expect(tool.getCursorAt({ x: 304, y: 204 })).toBe("nwse-resize");
     // TL handle
     expect(tool.getCursorAt({ x: 96, y: 96 })).toBe("nwse-resize");
-    // TR handle
-    expect(tool.getCursorAt({ x: 304, y: 96 })).toBe("nesw-resize");
+    // TR handle — rect は TL/BR のみなのでカーソルなし
+    expect(tool.getCursorAt({ x: 304, y: 96 })).toBeUndefined();
     // 図形の内部（ハンドル外）
     expect(tool.getCursorAt({ x: 200, y: 150 })).toBeUndefined();
   });

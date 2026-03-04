@@ -1,8 +1,11 @@
-import type { Shape } from "../shared";
+import type { Shape, ToolType } from "../shared";
 import { ArrowShape } from "../shared";
 import type { DragHandleId } from "./tools/SelectTool";
 
 export type EditorMode = "idle" | "hintMode" | "handleHintMode" | "objectInsertingMode";
+
+/** objectInsertingMode で選択可能な図形ツール一覧 */
+const INSERT_TOOL_TYPES: ToolType[] = ["rect", "ellipse", "arrow", "bubble", "text", "table"];
 
 /**
  * vimium 風のヒントラベルを n 個生成する。
@@ -47,6 +50,9 @@ export class EditorStateMachine {
   // handleHintMode 専用状態
   private _handleHintMap: Map<string, DragHandleId> = new Map(); // キー文字 -> handleId
 
+  // objectInsertingMode 専用状態
+  private _insertSelectedIndex = 0;
+
   /** モード変化後（再描画など）に呼ばれるコールバック */
   private readonly onModeChange: () => void;
 
@@ -60,6 +66,9 @@ export class EditorStateMachine {
   get hintMap(): ReadonlyMap<string, string> { return this._hintMap; }
   get hintInput(): string { return this._hintInput; }
   get handleHintMap(): ReadonlyMap<string, DragHandleId> { return this._handleHintMap; }
+  get insertShapeTypes(): readonly ToolType[] { return INSERT_TOOL_TYPES; }
+  get insertSelectedIndex(): number { return this._insertSelectedIndex; }
+  get insertSelectedType(): ToolType { return INSERT_TOOL_TYPES[this._insertSelectedIndex]; }
 
   // ----- モード遷移 -----
 
@@ -96,7 +105,15 @@ export class EditorStateMachine {
 
   /** idle → objectInsertingMode */
   enterObjectInsertingMode(): void {
+    this._insertSelectedIndex = 0;
     this._mode = "objectInsertingMode";
+    this.onModeChange();
+  }
+
+  /** objectInsertingMode: 選択を上下に移動する */
+  moveInsertSelection(delta: number): void {
+    const len = INSERT_TOOL_TYPES.length;
+    this._insertSelectedIndex = ((this._insertSelectedIndex + delta) % len + len) % len;
     this.onModeChange();
   }
 
@@ -106,6 +123,7 @@ export class EditorStateMachine {
     this._hintMap = new Map();
     this._hintInput = "";
     this._handleHintMap = new Map();
+    this._insertSelectedIndex = 0;
     this.onModeChange();
   }
 

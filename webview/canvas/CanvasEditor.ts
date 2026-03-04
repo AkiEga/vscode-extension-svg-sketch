@@ -97,12 +97,17 @@ export class CanvasEditor {
   // ハンドルヒントモードで選択中のハンドル (矢印キー移動に使用)
   private activeHandleForKbd: DragHandleId | undefined;
 
+  // キーボードカーソル位置 (idle 時の移動 & objectInsertingMode の挿入起点)
+  private cursorPos: Point = { x: 0, y: 0 };
+  private cursorInitialized = false;
+
   // Help overlay
   private helpOverlayEl: HTMLElement | undefined;
 
   private onSelectionChange: (ids: Set<string>) => void = () => {};
   private onChange: () => void = () => {};
   private onToolChange: (tool: ToolType) => void = () => {};
+  private onStyleCycled: () => void = () => {};
   private activePopupCleanup: (() => void) | undefined;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -117,6 +122,7 @@ export class CanvasEditor {
     this.canvas.className = "tool-select";
     this.setupEvents();
     this.resize();
+    this.initCursorPos();
     this.render();
   }
 
@@ -215,6 +221,10 @@ export class CanvasEditor {
 
   setOnToolChange(cb: (tool: ToolType) => void): void {
     this.onToolChange = cb;
+  }
+
+  setOnStyleCycled(cb: () => void): void {
+    this.onStyleCycled = cb;
   }
 
   getShapes(): Shape[] {
@@ -362,6 +372,83 @@ export class CanvasEditor {
     return this.shapes.map(s => s.clone());
   }
 
+  /** カーソル位置をキャンバス中央で初期化する */
+  private initCursorPos(): void {
+    if (!this.cursorInitialized) {
+      const dpr = window.devicePixelRatio || 1;
+      this.cursorPos = {
+        x: snapValue(this.canvas.width / dpr / 2, this._gridSize),
+        y: snapValue(this.canvas.height / dpr / 2, this._gridSize),
+      };
+      this.cursorInitialized = true;
+    }
+  }
+
+  /** カーソル位置に指定ツール種別の図形を作成して挿入する */
+  private insertShapeAtCursor(toolType: ToolType): void {
+    const pt = { ...this.cursorPos };
+    const gs = this._gridSize;
+    const defaultW = gs * 5;
+    const defaultH = gs * 3;
+    let shape: Shape;
+
+    switch (toolType) {
+      case "rect":
+        shape = new RectShape({
+          id: nextId(), x: pt.x, y: pt.y, width: defaultW, height: defaultH,
+          stroke: this.style.stroke, fill: this.style.fill, lineWidth: this.style.lineWidth,
+        });
+        break;
+      case "ellipse":
+        shape = new EllipseShape({
+          id: nextId(), cx: pt.x + defaultW / 2, cy: pt.y + defaultH / 2,
+          rx: defaultW / 2, ry: defaultH / 2,
+          stroke: this.style.stroke, fill: this.style.fill, lineWidth: this.style.lineWidth,
+        });
+        break;
+      case "arrow":
+        shape = new ArrowShape({
+          id: nextId(), x1: pt.x, y1: pt.y + defaultH / 2,
+          x2: pt.x + defaultW, y2: pt.y + defaultH / 2,
+          stroke: this.style.stroke, fill: this.style.fill, lineWidth: this.style.lineWidth,
+        });
+        break;
+      case "bubble":
+        shape = new BubbleShape({
+          id: nextId(), x: pt.x, y: pt.y, width: defaultW, height: defaultH,
+          stroke: this.style.stroke, fill: this.style.fill, lineWidth: this.style.lineWidth,
+        });
+        break;
+      case "text":
+        shape = new TextShape({
+          id: nextId(), x: pt.x, y: pt.y + this.style.fontSize,
+          text: "Text", fontSize: this.style.fontSize,
+          fontFamily: this.style.fontFamily, fontColor: this.style.fontColor,
+          stroke: this.style.stroke, fill: this.style.stroke, lineWidth: this.style.lineWidth,
+        });
+        break;
+      case "table":
+        shape = new TableShape({
+          id: nextId(), x: pt.x, y: pt.y, width: defaultW, height: defaultH,
+          rows: 3, cols: 3, cells: Array.from({ length: 3 }, () => new Array(3).fill("")),
+          fontSize: this.style.fontSize,
+          stroke: this.style.stroke, fill: this.style.fill, lineWidth: this.style.lineWidth,
+        });
+        break;
+      default:
+        return;
+    }
+
+    if (this._snapToGrid) { this.snapShapeToGrid(shape); }
+    this.pushUndo();
+    this.shapes.push(shape);
+    this.selectedIds = new Set([shape.id]);
+    this.onSelectionChange(new Set(this.selectedIds));
+    this.onChange();
+    this.switchToSelect();
+    this.render();
+  }
+
   private snapSelectedShapesToGrid(): void {
     for (const shape of this.shapes) {
       if (this.selectedIds.has(shape.id)) {
@@ -471,15 +558,29 @@ export class CanvasEditor {
           this.render();
           return;
         }
-        // ツールキー (t/r/e/a/b/g/v/s) は main.ts が処理するのでスルー
-        const toolKeys = ["t", "r", "e", "a", "b", "g", "v"];
-        if (!toolKeys.includes(e.key.toLowerCase())) {
-          if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-            e.preventDefault();
-          }
+        // 上下キーで図形種別を選択
+        if (e.key === "ArrowUp" || e.key === "k") {
+          e.preventDefault();
+          this.stateMachine.moveInsertSelection(-1);
           return;
         }
-        return; // ツールキーは main.ts に委ねる
+        if (e.key === "ArrowDown" || e.key === "j") {
+          e.preventDefault();
+          this.stateMachine.moveInsertSelection(1);
+          return;
+        }
+        // Enter で確定 → カーソル位置に図形を挿入
+        if (e.key === "Enter") {
+          e.preventDefault();
+          this.insertShapeAtCursor(this.stateMachine.insertSelectedType);
+          this.stateMachine.exitToIdle();
+          return;
+        }
+        // その他のキーは無視
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          e.preventDefault();
+        }
+        return;
       }
 
       // テキスト入力中かどうかを一度取得し、以降のショートカットの分岐に利用
@@ -666,6 +767,14 @@ export class CanvasEditor {
         return;
       }
 
+      // `s` キー: スタイル切替
+      if (e.key === "s" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat) {
+        e.preventDefault();
+        this.cycleRenderStyle();
+        this.onStyleCycled();
+        return;
+      }
+
       // `i` キー: Idle 状態でオブジェクト挿入モードに入る
       if (e.key === "i" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat) {
         if (this.selectedIds.size === 0) {
@@ -704,10 +813,27 @@ export class CanvasEditor {
         return;
       }
 
-      // 矢印キー / hjkl / Ctrl+n,p で図形 or ハンドル移動
+      // 矢印キー / hjkl / Ctrl+n,p で図形 or ハンドル or カーソル移動
       const isArrow = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key);
       const isVimMove = ["h", "j", "k", "l"].includes(e.key) && !e.ctrlKey && !e.altKey && !e.metaKey;
       const isEmacsMove = e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "n" || e.key === "p");
+
+      // 図形未選択時はカーソル移動
+      if ((isArrow || isVimMove || isEmacsMove) && this.selectedIds.size === 0) {
+        e.preventDefault();
+        const step = e.ctrlKey && !isEmacsMove ? 1 : this._gridSize;
+        let dx = 0, dy = 0;
+        if (e.key === "ArrowLeft"  || e.key === "h") { dx = -step; }
+        if (e.key === "ArrowRight" || e.key === "l") { dx =  step; }
+        if (e.key === "ArrowUp"    || e.key === "k") { dy = -step; }
+        if (e.key === "ArrowDown"  || e.key === "j") { dy =  step; }
+        if (e.key === "n") { dy =  step; }
+        if (e.key === "p") { dy = -step; }
+        this.cursorPos.x += dx;
+        this.cursorPos.y += dy;
+        this.render();
+        return;
+      }
 
       const hasMoveTarget = this.activeHandleForKbd
         ? this.selectedIds.size === 1
@@ -875,6 +1001,10 @@ export class CanvasEditor {
     const preview = this.currentTool.getPreview();
     const rubberBand = this.selectTool.getRubberband();
     renderShapes(this.ctx, this.shapes, preview, this.selectedIds, rubberBand, this._renderStyle);
+    // カーソルを描画（図形未選択時 or objectInsertingMode 時）
+    if (this.selectedIds.size === 0 || this.stateMachine.mode === "objectInsertingMode") {
+      this.drawCursor();
+    }
     if (this.stateMachine.mode === "hintMode") { this.drawHintLabels(); }
     if (this.stateMachine.mode === "handleHintMode") { this.drawHandleHints(); }
     if (this.activeHandleForKbd && this.selectedIds.size === 1) { this.drawActiveHandleIndicator(); }
@@ -995,11 +1125,13 @@ export class CanvasEditor {
       ["f",          "図形をヒント選択 / ハンドル選択"],
       ["f (選択後)",   "始点・終点・角を選択してサイズ調整"],
       ["1~4 / s,e",  "ハンドルモード: 角(1-4) or 始端(s)/終端(e) 選択"],
-      ["h / ←",      "左へ移動"],
-      ["j / ↓",      "下へ移動"],
-      ["k / ↑",      "上へ移動"],
-      ["l / →",      "右へ移動"],
+      ["h / ←",      "左へ移動 (未選択時はカーソル移動)"],
+      ["j / ↓",      "下へ移動 (未選択時はカーソル移動)"],
+      ["k / ↑",      "上へ移動 (未選択時はカーソル移動)"],
+      ["l / →",      "右へ移動 (未選択時はカーソル移動)"],
       ["Ctrl + ←↑↓→","1px ずつ微調整"],
+      ["i",          "図形挿入モード (↑↓で選択 → Enter で確定)"],
+      ["s",          "描画スタイル切替 (Plain→Sketch→Pencil)"],
       ["Escape / Ctrl+G", "ハンドル解除 → 選択解除"],
       ["Del / BS",   "図形を削除"],
       ["F2",         "ラベル編集"],
@@ -1009,7 +1141,6 @@ export class CanvasEditor {
       ["Ctrl+V",     "貼り付け"],
       ["Ctrl+Shift+G","グループ化"],
       ["Ctrl+U",     "グループ解除"],
-      ["H",          "描画スタイル切替 (Plain→Sketch→Pencil)"],
       ["?",          "このヘルプを表示/非表示"],
     ];
 
@@ -1113,6 +1244,36 @@ export class CanvasEditor {
     ctx.restore();
   }
 
+  /** カーソル十字を描画する */
+  private drawCursor(): void {
+    const ctx = this.ctx;
+    const dpr = window.devicePixelRatio || 1;
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const { x, y } = this.cursorPos;
+    const arm = 10;
+    ctx.strokeStyle = "#ff6600";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    // 横線
+    ctx.beginPath();
+    ctx.moveTo(x - arm, y);
+    ctx.lineTo(x + arm, y);
+    ctx.stroke();
+    // 縦線
+    ctx.beginPath();
+    ctx.moveTo(x, y - arm);
+    ctx.lineTo(x, y + arm);
+    ctx.stroke();
+    // 中心点
+    ctx.fillStyle = "#ff6600";
+    ctx.beginPath();
+    ctx.arc(x, y, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** objectInsertingMode: 図形選択メニューを描画する */
   private drawInsertIndicator(): void {
     const ctx = this.ctx;
     const dpr = window.devicePixelRatio || 1;
@@ -1120,20 +1281,60 @@ export class CanvasEditor {
     const logicalH = this.canvas.height / dpr;
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const text = "-- INSERT --";
-    const fontSize = 13;
-    const pad = 6;
-    ctx.font = `bold ${fontSize}px monospace`;
-    const tw = ctx.measureText(text).width;
-    const x = logicalW / 2 - tw / 2 - pad;
-    const y = logicalH - fontSize - pad * 3;
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
+
+    const types = this.stateMachine.insertShapeTypes;
+    const selIdx = this.stateMachine.insertSelectedIndex;
+    const LABEL_MAP: Record<string, string> = {
+      rect: "■ Rect", ellipse: "● Ellipse", arrow: "→ Arrow",
+      bubble: "💬 Bubble", text: "T Text", table: "⊞ Table",
+    };
+
+    const fontSize = 14;
+    const lineH = fontSize + 10;
+    const padX = 14;
+    const padY = 8;
+    const totalH = lineH * types.length + padY * 2;
+
+    ctx.font = `${fontSize}px monospace`;
+    let maxW = 0;
+    for (const t of types) {
+      const w = ctx.measureText(LABEL_MAP[t] ?? t).width;
+      if (w > maxW) { maxW = w; }
+    }
+    const boxW = maxW + padX * 2;
+    const boxX = logicalW / 2 - boxW / 2;
+    const boxY = logicalH / 2 - totalH / 2;
+
+    // 背景
+    ctx.fillStyle = "rgba(0,0,0,0.75)";
     ctx.beginPath();
-    if (ctx.roundRect) { ctx.roundRect(x, y, tw + pad * 2, fontSize + pad * 2, 3); }
-    else { ctx.rect(x, y, tw + pad * 2, fontSize + pad * 2); }
+    if (ctx.roundRect) { ctx.roundRect(boxX, boxY, boxW, totalH, 6); }
+    else { ctx.rect(boxX, boxY, boxW, totalH); }
     ctx.fill();
-    ctx.fillStyle = "#7fdbca";
-    ctx.fillText(text, x + pad, y + fontSize + pad / 2);
+
+    // タイトル的なヘッダ
+    // 各行を描画
+    for (let i = 0; i < types.length; i++) {
+      const itemY = boxY + padY + i * lineH;
+      const label = LABEL_MAP[types[i]] ?? types[i];
+      const isSelected = i === selIdx;
+
+      if (isSelected) {
+        ctx.fillStyle = "rgba(74, 144, 217, 0.6)";
+        ctx.fillRect(boxX + 2, itemY, boxW - 4, lineH);
+      }
+
+      ctx.fillStyle = isSelected ? "#fff" : "#aaa";
+      ctx.fillText(label, boxX + padX, itemY + fontSize + 2);
+    }
+
+    // 下部ヒント
+    const hint = "↑↓: select / Enter: insert / Esc: cancel";
+    ctx.font = `11px monospace`;
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    const hintW = ctx.measureText(hint).width;
+    ctx.fillText(hint, logicalW / 2 - hintW / 2, boxY + totalH + 16);
+
     ctx.restore();
   }
 

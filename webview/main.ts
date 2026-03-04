@@ -92,23 +92,13 @@ toolButtons.forEach((btn) => {
   });
 });
 
-// Keyboard shortcuts for tools
+// Keyboard shortcuts for tools (v for select only; shape insertion is now handled by CanvasEditor)
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) { return; }
-  const keyMap: Record<string, ToolType> = {
-    v: "select", r: "rect", e: "ellipse", a: "arrow", t: "text", b: "bubble", g: "table",
-  };
-  const tool = keyMap[e.key.toLowerCase()];
-  if (tool) {
-    // 図形作成ツールは ObjectInserting モードでのみ有効（select ツールは常に有効）
-    if (tool !== "select" && !editor.isObjectInsertingMode()) { return; }
+  if (e.key.toLowerCase() === "v") {
     toolButtons.forEach((b) => b.classList.remove("active"));
-    document.querySelector<HTMLButtonElement>(`button[data-tool="${tool}"]`)?.classList.add("active");
-    editor.setTool(tool);
-    // ObjectInserting モードを終了
-    if (editor.isObjectInsertingMode()) {
-      editor.exitObjectInsertingMode();
-    }
+    document.querySelector<HTMLButtonElement>(`button[data-tool="select"]`)?.classList.add("active");
+    editor.setTool("select");
   }
 });
 
@@ -312,14 +302,8 @@ btnStyle?.addEventListener("click", () => {
   syncStyleButton();
 });
 
-// Keyboard shortcut: H for style cycling
-window.addEventListener("keydown", (e) => {
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) { return; }
-  if (e.key.toLowerCase() === "h" && !e.ctrlKey && !e.metaKey) {
-    editor.cycleRenderStyle();
-    syncStyleButton();
-  }
-}, { capture: false });
+// Keyboard shortcut: s for style cycling (handled in CanvasEditor, sync button via callback)
+editor.setOnStyleCycled(() => syncStyleButton());
 
 document.getElementById("btn-save")!.addEventListener("click", () => {
   const shapes = editor.getShapes();

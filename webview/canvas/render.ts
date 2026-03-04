@@ -602,7 +602,9 @@ function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Shape): vo
   // Draw corner handles
   ctx.setLineDash([]);
   ctx.fillStyle = "#4a90d9";
-  const corners = [h.tl, h.tr, h.bl, h.br];
+  // Rect, Ellipse, Bubble show only TL/BR handles
+  const tlBrOnly = shape instanceof RectShape || shape instanceof EllipseShape || shape instanceof BubbleShape;
+  const corners = tlBrOnly ? [h.tl, h.br] : [h.tl, h.tr, h.bl, h.br];
   for (const c of corners) {
     ctx.fillRect(c.x - HANDLE_SIZE / 2, c.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
   }
