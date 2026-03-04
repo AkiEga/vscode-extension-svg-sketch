@@ -7,6 +7,82 @@ import type { RubberBand } from "./tools/SelectTool";
 const HANDLE_SIZE = 6;
 const imageCache = new Map<string, HTMLImageElement>();
 
+// ── Sketch / hand-drawn helpers ──────────────────────────────────
+
+/** Simple seeded LCG pseudo-random number generator, returns [0, 1) */
+function makeRand(seed: number): () => number {
+  let s = (seed ^ 0xdeadbeef) >>> 0;
+  return (): number => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 0x100000000;
+  };
+}
+
+/** Derive a stable integer seed from a shape's id string */
+function seedOf(shape: Shape): number {
+  let h = 0x12345678;
+  for (let i = 0; i < shape.id.length; i++) {
+    h = (Math.imul(h ^ shape.id.charCodeAt(i), 0x9e3779b9)) >>> 0;
+  }
+  return h;
+}
+
+/**
+ * Add a quadratic-bezier "sketchy" segment to the current open path.
+ * Caller must call ctx.beginPath() before and ctx.stroke() after collecting all segments.
+ */
+function sketchSegment(
+  ctx: CanvasRenderingContext2D,
+  x1: number, y1: number,
+  x2: number, y2: number,
+  rand: () => number,
+): void {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const nx = len > 0.1 ? -dy / len : 0;
+  const ny = len > 0.1 ? dx / len : 0;
+  const r = () => rand() - 0.5;
+  const mag = Math.min(3, len * 0.015 + 1);
+  const cpx = (x1 + x2) / 2 + nx * r() * mag * 2 + r() * mag;
+  const cpy = (y1 + y2) / 2 + ny * r() * mag * 2 + r() * mag;
+  ctx.moveTo(x1 + r() * 1.2, y1 + r() * 1.2);
+  ctx.quadraticCurveTo(cpx, cpy, x2 + r() * 1.2, y2 + r() * 1.2);
+}
+
+/** Draw the 4 sides of a rectangle with a hand-drawn sketchy stroke (fill is unaffected) */
+function drawSketchyRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  rand: () => number,
+): void {
+  const ov = () => (rand() - 0.5) * 2.5;
+  ctx.beginPath();
+  sketchSegment(ctx, x + ov(), y + ov(), x + w + ov(), y + ov(), rand);          // top
+  sketchSegment(ctx, x + w + ov(), y + ov(), x + w + ov(), y + h + ov(), rand);  // right
+  sketchSegment(ctx, x + w + ov(), y + h + ov(), x + ov(), y + h + ov(), rand);  // bottom
+  sketchSegment(ctx, x + ov(), y + h + ov(), x + ov(), y + ov(), rand);          // left
+  ctx.stroke();
+}
+
+/** Draw an ellipse with a hand-drawn sketchy stroke (fill is unaffected) */
+function drawSketchyEllipse(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number, rx: number, ry: number,
+  rand: () => number,
+): void {
+  const segs = Math.max(20, Math.round(Math.PI * (rx + ry) * 0.5));
+  const tStart = (rand() - 0.5) * 0.3;
+  ctx.beginPath();
+  for (let i = 0; i <= segs; i++) {
+    const t = tStart + (i / segs) * (Math.PI * 2 + 0.12);
+    const wobble = 1 + (rand() - 0.5) * 0.05;
+    const px = cx + Math.cos(t) * rx * wobble;
+    const py = cy + Math.sin(t) * ry * wobble;
+    if (i === 0) { ctx.moveTo(px, py); } else { ctx.lineTo(px, py); }
+  }
+  ctx.stroke();
+}
+
 function hasVisibleStroke(shape: Shape): boolean {
   return shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent";
 }
@@ -85,7 +161,7 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
         ctx.fillRect(s.x, s.y, s.width, s.height);
       }
       if (drawStroke) {
-        ctx.strokeRect(s.x, s.y, s.width, s.height);
+        drawSketchyRect(ctx, s.x, s.y, s.width, s.height, makeRand(seedOf(s)));
       }
       drawShapeLabel(ctx, s, s.x + s.width / 2, s.y + s.height / 2);
       break;
@@ -99,7 +175,7 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
         ctx.fill();
       }
       if (drawStroke) {
-        ctx.stroke();
+        drawSketchyEllipse(ctx, s.cx, s.cy, Math.max(s.rx, 0), Math.max(s.ry, 0), makeRand(seedOf(s)));
       }
       drawShapeLabel(ctx, s, s.cx, s.cy);
       break;
@@ -107,14 +183,14 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
 
     case "arrow": {
       const s = shape as ArrowShape;
-      drawArrow(ctx, s.x1, s.y1, s.x2, s.y2);
+      drawArrow(ctx, s.x1, s.y1, s.x2, s.y2, makeRand(seedOf(s)));
       drawShapeLabel(ctx, s, (s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2 - 10);
       break;
     }
 
     case "bubble": {
       const s = shape as BubbleShape;
-      drawBubble(ctx, s);
+      drawBubble(ctx, s, makeRand(seedOf(s)));
       drawShapeLabel(ctx, s, s.x + s.width / 2, s.y + s.height / 2);
       break;
     }
@@ -166,27 +242,28 @@ function drawImageShape(ctx: CanvasRenderingContext2D, shape: ImageShape, drawSt
   }
 }
 
-function drawBubble(ctx: CanvasRenderingContext2D, shape: BubbleShape): void {
+function drawBubble(ctx: CanvasRenderingContext2D, shape: BubbleShape, rand: () => number): void {
   const drawStroke = hasVisibleStroke(shape);
   const radius = 10;
   const x = shape.x;
   const y = shape.y;
   const w = shape.width;
   const h = shape.height;
+  const wb = () => (rand() - 0.5) * 2;
 
   ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + w - radius, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
-  ctx.lineTo(x + w, y + h - radius);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-  ctx.lineTo(x + w * 0.6, y + h);
-  ctx.lineTo(x + w * 0.5, y + h + 16);
-  ctx.lineTo(x + w * 0.45, y + h);
-  ctx.lineTo(x + radius, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.moveTo(x + radius + wb(), y + wb());
+  ctx.lineTo(x + w - radius + wb(), y + wb());
+  ctx.quadraticCurveTo(x + w + wb(), y + wb(), x + w + wb(), y + radius + wb());
+  ctx.lineTo(x + w + wb(), y + h - radius + wb());
+  ctx.quadraticCurveTo(x + w + wb(), y + h + wb(), x + w - radius + wb(), y + h + wb());
+  ctx.lineTo(x + w * 0.6 + wb(), y + h + wb());
+  ctx.lineTo(x + w * 0.5 + wb(), y + h + 16 + wb());
+  ctx.lineTo(x + w * 0.45 + wb(), y + h + wb());
+  ctx.lineTo(x + radius + wb(), y + h + wb());
+  ctx.quadraticCurveTo(x + wb(), y + h + wb(), x + wb(), y + h - radius + wb());
+  ctx.lineTo(x + wb(), y + radius + wb());
+  ctx.quadraticCurveTo(x + wb(), y + wb(), x + radius + wb(), y + wb());
   ctx.closePath();
 
   if (shape.fill !== "none" && shape.fill !== "transparent") {
@@ -222,26 +299,27 @@ function drawShapeLabel(
 function drawArrow(
   ctx: CanvasRenderingContext2D,
   x1: number, y1: number, x2: number, y2: number,
+  rand: () => number,
 ): void {
   const headLen = 12;
   const angle = Math.atan2(y2 - y1, x2 - x1);
+  const r = () => rand() - 0.5;
 
-  // Line
+  // Sketchy shaft
   ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
+  sketchSegment(ctx, x1, y1, x2, y2, rand);
   ctx.stroke();
 
-  // Arrowhead
+  // Arrowhead (with slight wobble)
   ctx.beginPath();
-  ctx.moveTo(x2, y2);
+  ctx.moveTo(x2 + r() * 1.0, y2 + r() * 1.0);
   ctx.lineTo(
-    x2 - headLen * Math.cos(angle - Math.PI / 6),
-    y2 - headLen * Math.sin(angle - Math.PI / 6),
+    x2 - headLen * Math.cos(angle - Math.PI / 6) + r() * 1.5,
+    y2 - headLen * Math.sin(angle - Math.PI / 6) + r() * 1.5,
   );
   ctx.lineTo(
-    x2 - headLen * Math.cos(angle + Math.PI / 6),
-    y2 - headLen * Math.sin(angle + Math.PI / 6),
+    x2 - headLen * Math.cos(angle + Math.PI / 6) + r() * 1.5,
+    y2 - headLen * Math.sin(angle + Math.PI / 6) + r() * 1.5,
   );
   ctx.closePath();
   ctx.fillStyle = ctx.strokeStyle;

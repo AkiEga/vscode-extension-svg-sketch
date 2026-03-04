@@ -38,26 +38,24 @@ describe("shapesToSvg", () => {
       stroke: "#333", fill: "none", lineWidth: 1,
     });
     const svg = shapesToSvg([ellipse]);
-    expect(svg).toContain('<ellipse');
-    expect(svg).toContain('cx="100"');
-    expect(svg).toContain('cy="100"');
-    expect(svg).toContain('rx="50"');
-    expect(svg).toContain('ry="30"');
+    // 手書き風: stroke は <path> 要素として出力される
+    expect(svg).toContain('<path');
+    expect(svg).toContain('data-shape-id="e1"');
+    expect(svg).toContain('stroke="#333"');
   });
 
-  it("arrow を line + arrowhead marker に変換する", () => {
+  it("arrow を path + polygon (arrowhead) に変換する", () => {
     const arrow = new ArrowShape({
       id: "a1", x1: 0, y1: 0, x2: 100, y2: 100,
       stroke: "#f00", fill: "none", lineWidth: 3,
     });
     const svg = shapesToSvg([arrow]);
-    expect(svg).toContain('<line');
-    expect(svg).toContain('x1="0"');
-    expect(svg).toContain('y1="0"');
-    expect(svg).toContain('x2="100"');
-    expect(svg).toContain('y2="100"');
-    expect(svg).toContain('marker-end="url(#arrowhead)"');
-    expect(svg).toContain('id="arrowhead"');
+    // 手書き風: shaft は <path>、矢頭は <polygon> として出力される
+    expect(svg).toContain('<path');
+    expect(svg).toContain('<polygon');
+    expect(svg).toContain('data-shape-id="a1"');
+    expect(svg).toContain('stroke="#f00"');
+    expect(svg).toContain('id="arrowhead"'); // <defs> のマーカー定義は残る
   });
 
   it("rect の label を中央テキストとして SVG に出力する", () => {
@@ -133,9 +131,9 @@ describe("shapesToSvg", () => {
       new ArrowShape({ id: "a1", x1: 50, y1: 25, x2: 70, y2: 100, stroke: "#000", fill: "none", lineWidth: 1 }),
     ];
     const svg = shapesToSvg(shapes);
-    expect(svg).toContain('<rect');
-    expect(svg).toContain('<ellipse');
-    expect(svg).toContain('<line');
+    expect(svg).toContain('<rect');    // fill あり rect は <rect> で fill
+    expect(svg).toContain('<ellipse');  // fill あり ellipse は <ellipse> で fill
+    expect(svg).toContain('<polygon'); // arrow の矢頭は <polygon>
   });
 
   it("カスタム width/height を指定できる", () => {
