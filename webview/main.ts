@@ -94,7 +94,7 @@ toolButtons.forEach((btn) => {
 
 // Keyboard shortcuts for tools
 window.addEventListener("keydown", (e) => {
-  if (e.target instanceof HTMLInputElement) { return; }
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) { return; }
   // Snap toggle: S key
   if (e.key.toLowerCase() === "s" && !e.ctrlKey && !e.metaKey) {
     const snapBtn = document.getElementById("btn-snap") as HTMLButtonElement | null;

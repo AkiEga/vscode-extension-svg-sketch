@@ -11,6 +11,7 @@ import type { DragHandleId } from "./tools/SelectTool";
 import { renderShapes } from "./render";
 import { prepareTemplateInsertion } from "./templateInsert";
 import { DEFAULT_DRAW_STYLE } from "./drawStyle";
+import { EditorStateMachine } from "./EditorStateMachine";
 
 /** Snap a value to the nearest grid line */
 function snapValue(value: number, gridSize: number): number {
@@ -64,23 +65,6 @@ function applyHandleDelta(shape: Shape, handle: DragHandleId, dx: number, dy: nu
   }
 }
 
-/**
- * vimium 風のヒントラベルを n 個生成する。
- * 1文字 → 2文字の順で、home-row 優先の文字順を使用する。
- */
-function generateHintLabels(n: number): string[] {
-  const chars = "asdfjkl;ghqwertyuiopzxcvbnm";
-  const labels: string[] = [];
-  for (let i = 0; i < chars.length && labels.length < n; i++) {
-    labels.push(chars[i]);
-  }
-  for (let i = 0; i < chars.length && labels.length < n; i++) {
-    for (let j = 0; j < chars.length && labels.length < n; j++) {
-      labels.push(chars[i] + chars[j]);
-    }
-  }
-  return labels.slice(0, n);
-}
 
 export class CanvasEditor {
   private canvas: HTMLCanvasElement;
@@ -104,18 +88,11 @@ export class CanvasEditor {
   private _snapToGrid = true;
   private _gridSize = 20;
 
-  // Hint mode (vimium-like 'f' key shape selection)
-  private hintMode = false;
-  private hintMap: Map<string, string> = new Map(); // label -> shapeId
-  private hintInput = "";
+  // モード状態遷移マシン (hintMode / handleHintMode / objectInsertingMode)
+  private readonly stateMachine: EditorStateMachine;
 
-  // Handle hint mode (second 'f' press: select a handle of the selected shape)
-  private handleHintMode = false;
-  private handleHintMap: Map<string, DragHandleId> = new Map(); // key char -> handleId
+  // ハンドルヒントモードで選択中のハンドル (矢印キー移動に使用)
   private activeHandleForKbd: DragHandleId | undefined;
-
-  // Object inserting mode ('i' key: Idle → tool selection → shape placed)
-  private objectInsertingMode = false;
 
   // Help overlay
   private helpOverlayEl: HTMLElement | undefined;
@@ -128,6 +105,7 @@ export class CanvasEditor {
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d")!;
+    this.stateMachine = new EditorStateMachine(() => this.render());
     this.selectTool = new SelectTool(this.shapes, (ids) => {
       this.selectedIds = new Set(ids);
       this.onSelectionChange(new Set(ids));
@@ -404,6 +382,13 @@ export class CanvasEditor {
     }
   }
 
+  /** WebView 内でテキスト入力フォーカス中かどうかを返す。
+   * INPUT/TEXTAREA にフォーカスがある場合、canvas ショートカットは発動しない。 */
+  private static isEditingText(): boolean {
+    const el = document.activeElement;
+    return el !== null && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+  }
+
   private setupEvents(): void {
     this.canvas.addEventListener("mousedown", (e) => this.onMouseDown(e));
     this.canvas.addEventListener("mousemove", (e) => this.onMouseMove(e));
@@ -417,47 +402,37 @@ export class CanvasEditor {
     });
 
     window.addEventListener("keydown", (e) => {
-      // --- ハンドルヒントモード中の処理 ---
-      if (this.handleHintMode) {
+      // --- ハンドルヒントモード中 ---
+      if (this.stateMachine.mode === "handleHintMode") {
         if (e.key === "Escape") {
           e.preventDefault();
-          this.exitHandleHintMode();
+          this.stateMachine.exitToIdle();
           return;
         }
         if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
           e.preventDefault();
-          const handleId = this.handleHintMap.get(e.key.toLowerCase());
-          if (handleId) {
-            this.activeHandleForKbd = handleId;
-          }
-          this.exitHandleHintMode();
+          const handleId = this.stateMachine.processHandleInput(e.key);
+          if (handleId) { this.activeHandleForKbd = handleId; }
+          this.render();
           return;
         }
         return; // ハンドルヒントモード中は他のキーを無視
       }
 
-      // --- ヒントモード中の処理 ---
-      if (this.hintMode) {
+      // --- ヒントモード中 ---
+      if (this.stateMachine.mode === "hintMode") {
         if (e.key === "Escape") {
           e.preventDefault();
-          this.exitHintMode();
+          this.stateMachine.exitToIdle();
           return;
         }
         if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
           e.preventDefault();
-          this.hintInput += e.key.toLowerCase();
-          const shapeId = this.hintMap.get(this.hintInput);
-          if (shapeId) {
-            this.selectedIds = new Set([shapeId]);
+          const result = this.stateMachine.processHintInput(e.key);
+          if (typeof result === "string") {
+            this.selectedIds = new Set([result]);
             this.onSelectionChange(new Set(this.selectedIds));
-            this.exitHintMode();
-            return;
-          }
-          // 候補が残っているか確認
-          const hasPrefix = [...this.hintMap.keys()].some((label) => label.startsWith(this.hintInput));
-          if (!hasPrefix) {
-            this.exitHintMode();
-            return;
+            this.stateMachine.exitToIdle();
           }
           this.render();
           return;
@@ -465,15 +440,15 @@ export class CanvasEditor {
         return; // ヒントモード中は他のキーを無視
       }
 
-      // --- ObjectInserting モード中の処理 ---
-      if (this.objectInsertingMode) {
+      // --- オブジェクト挿入モード中 ---
+      if (this.stateMachine.mode === "objectInsertingMode") {
         if (e.key === "Escape") {
           e.preventDefault();
-          this.exitObjectInsertingMode();
+          this.stateMachine.exitToIdle();
+          this.render();
           return;
         }
         // ツールキー (t/r/e/a/b/g/v/s) は main.ts が処理するのでスルー
-        // その他の文字キーは無視
         const toolKeys = ["t", "r", "e", "a", "b", "g", "v", "s"];
         if (!toolKeys.includes(e.key.toLowerCase())) {
           if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -481,82 +456,14 @@ export class CanvasEditor {
           }
           return;
         }
-        return; // ツールキーは main.ts に委ねてここでは何もしない
+        return; // ツールキーは main.ts に委ねる
       }
 
-      // --- `f` キー: 図形選択済み→ハンドルヒント、未選択→図形ヒント ---
-      if (e.key === "f" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat) {
-        const target = e.target as HTMLElement;
-        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
-          e.preventDefault();
-          if (this.selectedIds.size === 1) {
-            // 図形が1つ選択中 → ハンドルヒントモード
-            this.enterHandleHintMode();
-          } else if (this.shapes.length > 0) {
-            // 未選択 or 複数選択 → 図形ヒントモード
-            this.enterHintMode();
-          }
-          return;
-        }
-      }
+      // テキスト入力中かどうかを一度取得し、以降のショートカットの分岐に利用
+      const editingText = CanvasEditor.isEditingText();
 
-      // --- `i` キー: Idle 状態でオブジェクト挿入モードに入る ---
-      if (e.key === "i" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat) {
-        const target = e.target as HTMLElement;
-        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
-          if (this.selectedIds.size === 0) {
-            e.preventDefault();
-            this.enterObjectInsertingMode();
-            return;
-          }
-        }
-      }
-
-      // --- `?` キーでヘルプオーバーレイ表示/非表示 ---
-      if (e.key === "?" && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        const target = e.target as HTMLElement;
-        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
-          e.preventDefault();
-          this.toggleHelpOverlay();
-          return;
-        }
-      }
-
-      // --- `Escape` キー ---
-      if (e.key === "Escape") {
-        if (this.helpOverlayEl) { this.hideHelpOverlay(); return; }
-        if (this.handleHintMode) { this.exitHandleHintMode(); return; }
-        if (this.activeHandleForKbd) {
-          this.activeHandleForKbd = undefined;
-          this.render();
-          return;
-        }
-        if (this.selectedIds.size > 0) {
-          this.selectedIds.clear();
-          this.onSelectionChange(new Set());
-          this.render();
-        }
-        return;
-      }
-
-      if ((e.key === "Delete" || e.key === "Backspace") && this.selectedIds.size > 0) {
-        const target = e.target as HTMLElement;
-        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
-          this.deleteSelected();
-        }
-      }
-
-      // --- 矢印キー / hjkl / Ctrl+n,p で図形 or ハンドル移動 ---
-      const isArrow = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key);
-      const isVimMove = ["h", "j", "k", "l"].includes(e.key) && !e.ctrlKey && !e.altKey && !e.metaKey &&
-        (e.target as HTMLElement).tagName !== "INPUT" && (e.target as HTMLElement).tagName !== "TEXTAREA";
-      const isInputFocused = (e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "TEXTAREA";
-      // Ctrl+n (下移動) / Ctrl+p (上移動): INPUT 外のみ
-      const isEmacsMove = e.ctrlKey && !e.altKey && !e.metaKey && !isInputFocused &&
-        (e.key === "n" || e.key === "p");
-
-      // --- INPUT 内 Emacs キーバインド ---
-      if (isInputFocused) {
+      // --- INPUT/TEXTAREA 向け Emacs キーバインド（テキスト入力中のみ） ---
+      if (editingText) {
         // Ctrl+h → Backspace 相当（左の文字を1文字削除）
         if (e.ctrlKey && e.key === "h") {
           e.preventDefault();
@@ -717,12 +624,72 @@ export class CanvasEditor {
           el.dispatchEvent(new Event("input", { bubbles: true }));
           return;
         }
+        // テキスト入力中はキャンバスショートカットを無視
+        return;
       }
+
+      // ---- 以下: canvas ショートカット（テキスト入力中は実行しない） ----
+
+      // `f` キー: 図形選択済み→ハンドルヒント、未選択→図形ヒント
+      if (e.key === "f" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat) {
+        e.preventDefault();
+        if (this.selectedIds.size === 1) {
+          const shapeId = [...this.selectedIds][0];
+          const shape = this.shapes.find((s) => s.id === shapeId);
+          if (shape) { this.stateMachine.enterHandleHintMode(shape); }
+        } else if (this.shapes.length > 0) {
+          this.stateMachine.enterHintMode(this.shapes);
+        }
+        return;
+      }
+
+      // `i` キー: Idle 状態でオブジェクト挿入モードに入る
+      if (e.key === "i" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat) {
+        if (this.selectedIds.size === 0) {
+          e.preventDefault();
+          this.stateMachine.enterObjectInsertingMode();
+          this.render();
+          return;
+        }
+      }
+
+      // `?` キーでヘルプオーバーレイ表示/非表示
+      if (e.key === "?" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        this.toggleHelpOverlay();
+        return;
+      }
+
+      // `Escape` キー
+      if (e.key === "Escape") {
+        if (this.helpOverlayEl) { this.hideHelpOverlay(); return; }
+        if (this.activeHandleForKbd) {
+          this.activeHandleForKbd = undefined;
+          this.render();
+          return;
+        }
+        if (this.selectedIds.size > 0) {
+          this.selectedIds.clear();
+          this.onSelectionChange(new Set());
+          this.render();
+        }
+        return;
+      }
+
+      if ((e.key === "Delete" || e.key === "Backspace") && this.selectedIds.size > 0) {
+        this.deleteSelected();
+        return;
+      }
+
+      // 矢印キー / hjkl / Ctrl+n,p で図形 or ハンドル移動
+      const isArrow = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key);
+      const isVimMove = ["h", "j", "k", "l"].includes(e.key) && !e.ctrlKey && !e.altKey && !e.metaKey;
+      const isEmacsMove = e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "n" || e.key === "p");
 
       const hasMoveTarget = this.activeHandleForKbd
         ? this.selectedIds.size === 1
         : this.selectedIds.size > 0;
-      if ((isArrow && !isInputFocused || isVimMove || isEmacsMove) && hasMoveTarget) {
+      if ((isArrow || isVimMove || isEmacsMove) && hasMoveTarget) {
         e.preventDefault();
         const step = e.ctrlKey && !isEmacsMove ? 1 : 20;
         let dx = 0;
@@ -754,24 +721,22 @@ export class CanvasEditor {
         }
         this.onChange();
         this.render();
+        return;
       }
+
       if (e.ctrlKey && e.key === "z") {
-        if (isInputFocused) { return; } // INPUT 内の Undo はブラウザに委ねる
         e.preventDefault();
         this.undo();
       }
       if (e.ctrlKey && e.key === "y") {
-        if (isInputFocused) { return; }
         e.preventDefault();
         this.redo();
       }
       if (e.ctrlKey && e.key === "c") {
-        if (isInputFocused) { return; } // INPUT 内のコピーはブラウザに委ねる
         e.preventDefault();
         this.copySelected();
       }
       if (e.ctrlKey && e.key === "v") {
-        if (isInputFocused) { return; }
         e.preventDefault();
         this.paste();
       }
@@ -780,12 +745,10 @@ export class CanvasEditor {
         this.editSelectedShapeLabel();
       }
       if (e.ctrlKey && e.key.toLowerCase() === "g" && !e.shiftKey) {
-        if (isInputFocused) { return; }
         e.preventDefault();
         this.groupSelected();
       }
       if (e.ctrlKey && e.key.toLowerCase() === "g" && e.shiftKey) {
-        if (isInputFocused) { return; }
         e.preventDefault();
         this.ungroupSelected();
       }
@@ -873,68 +836,18 @@ export class CanvasEditor {
     const preview = this.currentTool.getPreview();
     const rubberBand = this.selectTool.getRubberband();
     renderShapes(this.ctx, this.shapes, preview, this.selectedIds, rubberBand);
-    if (this.hintMode) { this.drawHintLabels(); }
-    if (this.handleHintMode) { this.drawHandleHints(); }
+    if (this.stateMachine.mode === "hintMode") { this.drawHintLabels(); }
+    if (this.stateMachine.mode === "handleHintMode") { this.drawHandleHints(); }
     if (this.activeHandleForKbd && this.selectedIds.size === 1) { this.drawActiveHandleIndicator(); }
-    if (this.objectInsertingMode) { this.drawInsertIndicator(); }
-  }
-
-  private enterHintMode(): void {
-    this.hintMode = true;
-    this.hintInput = "";
-    this.hintMap = new Map();
-    const labels = generateHintLabels(this.shapes.length);
-    for (let i = 0; i < this.shapes.length; i++) {
-      this.hintMap.set(labels[i], this.shapes[i].id);
-    }
-    this.render();
-  }
-
-  private exitHintMode(): void {
-    this.hintMode = false;
-    this.hintInput = "";
-    this.hintMap = new Map();
-    this.render();
-  }
-
-  private enterHandleHintMode(): void {
-    if (this.selectedIds.size !== 1) { return; }
-    const shapeId = [...this.selectedIds][0];
-    const shape = this.shapes.find((s) => s.id === shapeId);
-    if (!shape) { return; }
-    this.handleHintMap = new Map();
-    if (shape instanceof ArrowShape) {
-      this.handleHintMap.set("s", "start");
-      this.handleHintMap.set("e", "end");
-    } else {
-      // 数字キー: 1=tl, 2=tr, 3=bl, 4=br (位置イメージ)
-      this.handleHintMap.set("1", "tl");
-      this.handleHintMap.set("2", "tr");
-      this.handleHintMap.set("3", "bl");
-      this.handleHintMap.set("4", "br");
-    }
-    this.handleHintMode = true;
-    this.render();
-  }
-
-  private exitHandleHintMode(): void {
-    this.handleHintMode = false;
-    this.handleHintMap = new Map();
-    this.render();
-  }
-
-  private enterObjectInsertingMode(): void {
-    this.objectInsertingMode = true;
-    this.render();
+    if (this.stateMachine.mode === "objectInsertingMode") { this.drawInsertIndicator(); }
   }
 
   exitObjectInsertingMode(): void {
-    this.objectInsertingMode = false;
-    this.render();
+    this.stateMachine.exitToIdle();
   }
 
   isObjectInsertingMode(): boolean {
-    return this.objectInsertingMode;
+    return this.stateMachine.mode === "objectInsertingMode";
   }
 
   private drawHandleHints(): void {
@@ -1108,9 +1021,9 @@ export class CanvasEditor {
     const PAD_Y = 3;
     ctx.font = `bold ${FONT_SIZE}px monospace`;
 
-    for (const [label, shapeId] of this.hintMap) {
+    for (const [label, shapeId] of this.stateMachine.hintMap) {
       // 既入力部分が一致しない候補はスキップ
-      if (!label.startsWith(this.hintInput)) { continue; }
+      if (!label.startsWith(this.stateMachine.hintInput)) { continue; }
 
       const shape = this.shapes.find((s) => s.id === shapeId);
       if (!shape) { continue; }
@@ -1120,8 +1033,8 @@ export class CanvasEditor {
       const cy = (b.minY + b.maxY) / 2;
 
       const fullW = ctx.measureText(label).width;
-      const typedW = this.hintInput.length > 0 ? ctx.measureText(this.hintInput).width : 0;
-      const remaining = label.slice(this.hintInput.length);
+      const typedW = this.stateMachine.hintInput.length > 0 ? ctx.measureText(this.stateMachine.hintInput).width : 0;
+      const remaining = label.slice(this.stateMachine.hintInput.length);
 
       const bgX = cx - fullW / 2 - PAD_X;
       const bgY = cy - FONT_SIZE / 2 - PAD_Y;
@@ -1147,9 +1060,9 @@ export class CanvasEditor {
       const textY = cy + FONT_SIZE / 2 - 1;
 
       // 既入力部分（灰色）
-      if (this.hintInput.length > 0) {
+      if (this.stateMachine.hintInput.length > 0) {
         ctx.fillStyle = "#888";
-        ctx.fillText(this.hintInput, textX, textY);
+        ctx.fillText(this.stateMachine.hintInput, textX, textY);
       }
 
       // 未入力部分（黒）
