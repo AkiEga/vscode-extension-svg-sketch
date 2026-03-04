@@ -775,10 +775,15 @@ export class CanvasEditor {
         return;
       }
 
-      // `i` キー: Idle 状態でオブジェクト挿入モードに入る
+      // `i` キー: Select状態でラベル編集、未選択でオブジェクト挿入モード
       if (e.key === "i" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat) {
-        if (this.selectedIds.size === 0) {
-          e.preventDefault();
+        e.preventDefault();
+        if (this.selectedIds.size === 1) {
+          // 図形選択時: ラベル編集
+          this.editSelectedShapeLabel();
+          return;
+        } else if (this.selectedIds.size === 0) {
+          // 未選択時: オブジェクト挿入モード
           this.stateMachine.enterObjectInsertingMode();
           this.render();
           return;
@@ -1400,7 +1405,8 @@ export class CanvasEditor {
       if (e.key === "Enter") {
         e.preventDefault();
         commit();
-      } else if (e.key === "Escape") {
+      } else if (e.key === "Escape" || (e.key === "g" && e.ctrlKey && !e.shiftKey)) {
+        e.preventDefault();
         cleanup();
       }
     };
@@ -1492,8 +1498,8 @@ export class CanvasEditor {
     };
 
     const onKey = (e: KeyboardEvent) => {
-      // Ctrl+Enter / Escape で確定、素の Enter はブラウザに委ねて改行挿入
-      if ((e.key === "Enter" && e.ctrlKey) || e.key === "Escape") {
+      // Ctrl+Enter / Escape / Ctrl+G で確定、素の Enter はブラウザに委ねて改行挿入
+      if ((e.key === "Enter" && e.ctrlKey) || e.key === "Escape" || (e.key === "g" && e.ctrlKey && !e.shiftKey)) {
         e.preventDefault();
         e.stopPropagation(); // window の Escape ハンドラに伝播させない（選択を維持）
         commit();
@@ -1600,7 +1606,8 @@ export class CanvasEditor {
       if (e.key === "Enter") {
         e.preventDefault();
         commit();
-      } else if (e.key === "Escape") {
+      } else if (e.key === "Escape" || (e.key === "g" && e.ctrlKey && !e.shiftKey)) {
+        e.preventDefault();
         cleanup();
       }
     });
@@ -1998,7 +2005,7 @@ export class CanvasEditor {
     };
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === "Escape") {
+      if (e.key === "Enter" || e.key === "Escape" || (e.key === "g" && e.ctrlKey && !e.shiftKey)) {
         e.preventDefault();
         e.stopPropagation(); // window の Escape ハンドラに伝播させない（選択を維持）
         commit();
@@ -2072,7 +2079,7 @@ export class CanvasEditor {
     };
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === "Escape") {
+      if (e.key === "Enter" || e.key === "Escape" || (e.key === "g" && e.ctrlKey && !e.shiftKey)) {
         e.preventDefault();
         e.stopPropagation(); // window の Escape ハンドラに伝播させない（選択を維持）
         commit();
