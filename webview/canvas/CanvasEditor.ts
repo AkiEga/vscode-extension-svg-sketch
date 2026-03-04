@@ -821,7 +821,7 @@ export class CanvasEditor {
       // 図形未選択時はカーソル移動
       if ((isArrow || isVimMove || isEmacsMove) && this.selectedIds.size === 0) {
         e.preventDefault();
-        const step = e.ctrlKey && !isEmacsMove ? 1 : this._gridSize;
+        const step = this._gridSize;
         let dx = 0, dy = 0;
         if (e.key === "ArrowLeft"  || e.key === "h") { dx = -step; }
         if (e.key === "ArrowRight" || e.key === "l") { dx =  step; }
@@ -840,15 +840,14 @@ export class CanvasEditor {
         : this.selectedIds.size > 0;
       if ((isArrow || isVimMove || isEmacsMove) && hasMoveTarget) {
         e.preventDefault();
-        const step = e.ctrlKey && !isEmacsMove ? 1 : 20;
         let dx = 0;
         let dy = 0;
-        if (e.key === "ArrowLeft"  || e.key === "h") { dx = -step; }
-        if (e.key === "ArrowRight" || e.key === "l") { dx =  step; }
-        if (e.key === "ArrowUp"    || e.key === "k") { dy = -step; }
-        if (e.key === "ArrowDown"  || e.key === "j") { dy =  step; }
-        if (e.key === "n") { dy =  step; }  // Ctrl+n
-        if (e.key === "p") { dy = -step; }  // Ctrl+p
+        if (e.key === "ArrowLeft"  || e.key === "h") { dx = -20; }
+        if (e.key === "ArrowRight" || e.key === "l") { dx =  20; }
+        if (e.key === "ArrowUp"    || e.key === "k") { dy = -20; }
+        if (e.key === "ArrowDown"  || e.key === "j") { dy =  20; }
+        if (e.key === "n") { dy =  20; }  // Ctrl+n
+        if (e.key === "p") { dy = -20; }  // Ctrl+p
         // キー長押し時の auto-repeat では pushUndo しない（1操作 = 1アンドゥ）
         if (!e.repeat) { this.pushUndo(); }
         if (this.activeHandleForKbd && this.selectedIds.size === 1) {
@@ -859,8 +858,9 @@ export class CanvasEditor {
         } else {
           for (const shape of this.shapes.filter((s) => this.selectedIds.has(s.id))) {
             if (shape instanceof ArrowShape) {
-              shape.x1 += dx; shape.y1 += dy;
-              shape.x2 += dx; shape.y2 += dy;
+              // Arrow図形は10px単位で移動
+              shape.x1 += dx / 2; shape.y1 += dy / 2;
+              shape.x2 += dx / 2; shape.y2 += dy / 2;
             } else if (shape instanceof EllipseShape) {
               shape.cx += dx; shape.cy += dy;
             } else if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TextShape || shape instanceof TableShape || shape instanceof ImageShape) {
@@ -1129,7 +1129,6 @@ export class CanvasEditor {
       ["j / ↓",      "下へ移動 (未選択時はカーソル移動)"],
       ["k / ↑",      "上へ移動 (未選択時はカーソル移動)"],
       ["l / →",      "右へ移動 (未選択時はカーソル移動)"],
-      ["Ctrl + ←↑↓→","1px ずつ微調整"],
       ["i",          "図形挿入モード (↑↓で選択 → Enter で確定)"],
       ["s",          "描画スタイル切替 (Plain→Sketch→Pencil)"],
       ["Escape / Ctrl+G", "ハンドル解除 → 選択解除"],
