@@ -107,9 +107,15 @@ window.addEventListener("keydown", (e) => {
   };
   const tool = keyMap[e.key.toLowerCase()];
   if (tool) {
+    // 図形作成ツールは ObjectInserting モードでのみ有効（select ツールは常に有効）
+    if (tool !== "select" && !editor.isObjectInsertingMode()) { return; }
     toolButtons.forEach((b) => b.classList.remove("active"));
     document.querySelector<HTMLButtonElement>(`button[data-tool="${tool}"]`)?.classList.add("active");
     editor.setTool(tool);
+    // ObjectInserting モードを終了
+    if (editor.isObjectInsertingMode()) {
+      editor.exitObjectInsertingMode();
+    }
   }
 });
 

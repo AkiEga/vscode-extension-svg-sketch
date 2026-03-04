@@ -205,11 +205,17 @@ function drawShapeLabel(
 ): void {
   if (!shape.label) { return; }
   ctx.save();
-  ctx.font = `${shape.labelFontSize ?? shapeDefaults.fontSize}px ${shape.labelFontFamily ?? shapeDefaults.fontFamily}`;
+  const fontSize = shape.labelFontSize ?? shapeDefaults.fontSize;
+  ctx.font = `${fontSize}px ${shape.labelFontFamily ?? shapeDefaults.fontFamily}`;
   ctx.fillStyle = shape.labelFontColor ?? shape.stroke;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(shape.label, x, y);
+  const lines = shape.label.split("\n");
+  const lineHeight = fontSize * 1.4;
+  const startY = y - (lines.length - 1) * lineHeight / 2;
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], x, startY + i * lineHeight);
+  }
   ctx.restore();
 }
 

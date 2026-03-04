@@ -34,7 +34,7 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
           const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
           const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
-          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+          lines.push(labelToSvgText(shape.label, lx, ly, fs, ff, fc));
         }
         break;
       case "ellipse":
@@ -45,7 +45,7 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
           const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
           const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
-          lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+          lines.push(labelToSvgText(shape.label, shape.cx, shape.cy, fs, ff, fc));
         }
         break;
       case "arrow":
@@ -58,7 +58,7 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
           const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
           const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
-          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+          lines.push(labelToSvgText(shape.label, lx, ly, fs, ff, fc));
         }
         break;
       case "bubble": {
@@ -86,7 +86,7 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
           const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
           const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
-          lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
+          lines.push(labelToSvgText(shape.label, lx, ly, fs, ff, fc));
         }
         break;
       }
@@ -162,4 +162,26 @@ function escapeXml(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** ラベル文字列を SVG <text> 要素に変換する。\n を <tspan> で複数行に展開する。 */
+export function labelToSvgText(
+  label: string,
+  x: number,
+  y: number,
+  fontSize: number,
+  fontFamily: string,
+  fontColor: string,
+  attrs = "",
+): string {
+  const lines = label.split("\n");
+  if (lines.length === 1) {
+    return `  <text x="${x}" y="${y}" font-size="${fontSize}" font-family="${fontFamily}" fill="${fontColor}" text-anchor="middle" dominant-baseline="central"${attrs}>${escapeXml(label)}</text>`;
+  }
+  const lineHeight = fontSize * 1.4;
+  const startY = y - (lines.length - 1) * lineHeight / 2;
+  const tspans = lines.map((line, i) =>
+    `    <tspan x="${x}" dy="${i === 0 ? 0 : lineHeight}">${escapeXml(line)}</tspan>`
+  ).join("\n");
+  return `  <text x="${x}" y="${startY}" font-size="${fontSize}" font-family="${fontFamily}" fill="${fontColor}" text-anchor="middle" dominant-baseline="middle"${attrs}>\n${tspans}\n  </text>`;
 }
