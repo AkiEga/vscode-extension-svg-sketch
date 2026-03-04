@@ -87,6 +87,107 @@ function hasVisibleStroke(shape: Shape): boolean {
   return shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent";
 }
 
+// ── Pencil-drawing helpers ───────────────────────────────────────
+// Pencil style draws multiple thin, slightly offset passes to mimic
+// a graphite pencil on paper. Each pass has subtle position jitter.
+
+function pencilSegment(
+  ctx: CanvasRenderingContext2D,
+  x1: number, y1: number,
+  x2: number, y2: number,
+  rand: () => number,
+): void {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const steps = Math.max(4, Math.round(len / 6));
+  ctx.moveTo(x1 + (rand() - 0.5) * 0.8, y1 + (rand() - 0.5) * 0.8);
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const px = x1 + dx * t + (rand() - 0.5) * 1.2;
+    const py = y1 + dy * t + (rand() - 0.5) * 1.2;
+    ctx.lineTo(px, py);
+  }
+}
+
+function drawPencilRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  rand: () => number,
+): void {
+  const savedAlpha = ctx.globalAlpha;
+  const passes = 3;
+  for (let p = 0; p < passes; p++) {
+    ctx.globalAlpha = savedAlpha * (0.3 + p * 0.15);
+    const ov = () => (rand() - 0.5) * 1.5;
+    ctx.beginPath();
+    pencilSegment(ctx, x + ov(), y + ov(), x + w + ov(), y + ov(), rand);
+    pencilSegment(ctx, x + w + ov(), y + ov(), x + w + ov(), y + h + ov(), rand);
+    pencilSegment(ctx, x + w + ov(), y + h + ov(), x + ov(), y + h + ov(), rand);
+    pencilSegment(ctx, x + ov(), y + h + ov(), x + ov(), y + ov(), rand);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = savedAlpha;
+}
+
+function drawPencilEllipse(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number, rx: number, ry: number,
+  rand: () => number,
+): void {
+  const savedAlpha = ctx.globalAlpha;
+  const passes = 3;
+  for (let p = 0; p < passes; p++) {
+    ctx.globalAlpha = savedAlpha * (0.3 + p * 0.15);
+    const segs = Math.max(24, Math.round(Math.PI * (rx + ry) * 0.6));
+    const tStart = (rand() - 0.5) * 0.2;
+    ctx.beginPath();
+    for (let i = 0; i <= segs; i++) {
+      const t = tStart + (i / segs) * (Math.PI * 2 + 0.08);
+      const wobble = 1 + (rand() - 0.5) * 0.03;
+      const px = cx + Math.cos(t) * rx * wobble + (rand() - 0.5) * 0.8;
+      const py = cy + Math.sin(t) * ry * wobble + (rand() - 0.5) * 0.8;
+      if (i === 0) { ctx.moveTo(px, py); } else { ctx.lineTo(px, py); }
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = savedAlpha;
+}
+
+function drawPencilArrow(
+  ctx: CanvasRenderingContext2D,
+  x1: number, y1: number, x2: number, y2: number,
+  rand: () => number,
+): void {
+  const headLen = 12;
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const savedAlpha = ctx.globalAlpha;
+
+  // Multi-pass shaft
+  for (let p = 0; p < 3; p++) {
+    ctx.globalAlpha = savedAlpha * (0.3 + p * 0.15);
+    ctx.beginPath();
+    pencilSegment(ctx, x1, y1, x2, y2, rand);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = savedAlpha;
+
+  // Arrowhead
+  const r = () => (rand() - 0.5) * 1.0;
+  ctx.beginPath();
+  ctx.moveTo(x2 + r(), y2 + r());
+  ctx.lineTo(
+    x2 - headLen * Math.cos(angle - Math.PI / 6) + r(),
+    y2 - headLen * Math.sin(angle - Math.PI / 6) + r(),
+  );
+  ctx.lineTo(
+    x2 - headLen * Math.cos(angle + Math.PI / 6) + r(),
+    y2 - headLen * Math.sin(angle + Math.PI / 6) + r(),
+  );
+  ctx.closePath();
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.fill();
+}
+
 /** Render all shapes onto a canvas 2D context */
 export function renderShapes(
   ctx: CanvasRenderingContext2D,
@@ -94,6 +195,7 @@ export function renderShapes(
   preview: Shape | undefined,
   selectedIds: Set<string>,
   rubberBand?: RubberBand,
+  style: "plain" | "sketch" | "pencil" = "plain",
 ): void {
   // Clear full physical canvas (transform-independent)
   ctx.save();
@@ -106,7 +208,7 @@ export function renderShapes(
 
   // Draw all shapes
   for (const shape of shapes) {
-    drawShape(ctx, shape);
+    drawShape(ctx, shape, style);
     if (selectedIds.has(shape.id)) {
       drawSelectionIndicator(ctx, shape);
     }
@@ -115,7 +217,7 @@ export function renderShapes(
   // Draw preview (semi-transparent)
   if (preview) {
     ctx.globalAlpha = 0.5;
-    drawShape(ctx, preview);
+    drawShape(ctx, preview, style);
     ctx.globalAlpha = 1.0;
   }
 
@@ -146,13 +248,19 @@ function drawGrid(ctx: CanvasRenderingContext2D): void {
   }
 }
 
-function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
+function drawShape(ctx: CanvasRenderingContext2D, shape: Shape, style: "plain" | "sketch" | "pencil" = "plain"): void {
   const drawStroke = hasVisibleStroke(shape);
+  const useSketchy = style === "sketch" || style === "pencil";
   if (drawStroke) {
     ctx.strokeStyle = shape.stroke;
   }
   ctx.fillStyle = shape.fill;
   ctx.lineWidth = drawStroke ? shape.lineWidth : 0;
+
+  // pencil style: thin line, slight transparency, multi-pass
+  if (style === "pencil" && drawStroke) {
+    ctx.lineWidth = Math.max(0.5, shape.lineWidth * 0.5);
+  }
 
   switch (shape.type) {
     case "rect": {
@@ -161,7 +269,13 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
         ctx.fillRect(s.x, s.y, s.width, s.height);
       }
       if (drawStroke) {
-        drawSketchyRect(ctx, s.x, s.y, s.width, s.height, makeRand(seedOf(s)));
+        if (style === "pencil") {
+          drawPencilRect(ctx, s.x, s.y, s.width, s.height, makeRand(seedOf(s)));
+        } else if (style === "sketch") {
+          drawSketchyRect(ctx, s.x, s.y, s.width, s.height, makeRand(seedOf(s)));
+        } else {
+          ctx.strokeRect(s.x, s.y, s.width, s.height);
+        }
       }
       drawShapeLabel(ctx, s, s.x + s.width / 2, s.y + s.height / 2);
       break;
@@ -175,7 +289,13 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
         ctx.fill();
       }
       if (drawStroke) {
-        drawSketchyEllipse(ctx, s.cx, s.cy, Math.max(s.rx, 0), Math.max(s.ry, 0), makeRand(seedOf(s)));
+        if (style === "pencil") {
+          drawPencilEllipse(ctx, s.cx, s.cy, Math.max(s.rx, 0), Math.max(s.ry, 0), makeRand(seedOf(s)));
+        } else if (style === "sketch") {
+          drawSketchyEllipse(ctx, s.cx, s.cy, Math.max(s.rx, 0), Math.max(s.ry, 0), makeRand(seedOf(s)));
+        } else {
+          ctx.stroke();
+        }
       }
       drawShapeLabel(ctx, s, s.cx, s.cy);
       break;
@@ -183,14 +303,24 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape): void {
 
     case "arrow": {
       const s = shape as ArrowShape;
-      drawArrow(ctx, s.x1, s.y1, s.x2, s.y2, makeRand(seedOf(s)));
+      if (style === "pencil") {
+        drawPencilArrow(ctx, s.x1, s.y1, s.x2, s.y2, makeRand(seedOf(s)));
+      } else if (style === "sketch") {
+        drawArrow(ctx, s.x1, s.y1, s.x2, s.y2, makeRand(seedOf(s)));
+      } else {
+        drawArrowStraight(ctx, s.x1, s.y1, s.x2, s.y2);
+      }
       drawShapeLabel(ctx, s, (s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2 - 10);
       break;
     }
 
     case "bubble": {
       const s = shape as BubbleShape;
-      drawBubble(ctx, s, makeRand(seedOf(s)));
+      if (useSketchy) {
+        drawBubble(ctx, s, makeRand(seedOf(s)));
+      } else {
+        drawBubbleStraight(ctx, s);
+      }
       drawShapeLabel(ctx, s, s.x + s.width / 2, s.y + s.height / 2);
       break;
     }
@@ -274,6 +404,37 @@ function drawBubble(ctx: CanvasRenderingContext2D, shape: BubbleShape, rand: () 
   }
 }
 
+function drawBubbleStraight(ctx: CanvasRenderingContext2D, shape: BubbleShape): void {
+  const drawStroke = hasVisibleStroke(shape);
+  const radius = 10;
+  const x = shape.x;
+  const y = shape.y;
+  const w = shape.width;
+  const h = shape.height;
+
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + w * 0.6, y + h);
+  ctx.lineTo(x + w * 0.5, y + h + 16);
+  ctx.lineTo(x + w * 0.45, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+
+  if (shape.fill !== "none" && shape.fill !== "transparent") {
+    ctx.fill();
+  }
+  if (drawStroke) {
+    ctx.stroke();
+  }
+}
+
 function drawShapeLabel(
   ctx: CanvasRenderingContext2D,
   shape: Shape & { label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; stroke: string },
@@ -320,6 +481,31 @@ function drawArrow(
   ctx.lineTo(
     x2 - headLen * Math.cos(angle + Math.PI / 6) + r() * 1.5,
     y2 - headLen * Math.sin(angle + Math.PI / 6) + r() * 1.5,
+  );
+  ctx.closePath();
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.fill();
+}
+
+function drawArrowStraight(
+  ctx: CanvasRenderingContext2D,
+  x1: number, y1: number, x2: number, y2: number,
+): void {
+  const headLen = 12;
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(
+    x2 - headLen * Math.cos(angle - Math.PI / 6),
+    y2 - headLen * Math.sin(angle - Math.PI / 6),
+  );
+  ctx.lineTo(
+    x2 - headLen * Math.cos(angle + Math.PI / 6),
+    y2 - headLen * Math.sin(angle + Math.PI / 6),
   );
   ctx.closePath();
   ctx.fillStyle = ctx.strokeStyle;

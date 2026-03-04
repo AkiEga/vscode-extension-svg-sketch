@@ -95,13 +95,6 @@ toolButtons.forEach((btn) => {
 // Keyboard shortcuts for tools
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) { return; }
-  // Snap toggle: S key
-  if (e.key.toLowerCase() === "s" && !e.ctrlKey && !e.metaKey) {
-    const snapBtn = document.getElementById("btn-snap") as HTMLButtonElement | null;
-    const on = editor.toggleSnap();
-    if (snapBtn) { snapBtn.classList.toggle("active", on); }
-    return;
-  }
   const keyMap: Record<string, ToolType> = {
     v: "select", r: "rect", e: "ellipse", a: "arrow", t: "text", b: "bubble", g: "table",
   };
@@ -302,23 +295,36 @@ applyStyleToControlsAndEditor({
 // Action buttons
 document.getElementById("btn-undo")!.addEventListener("click", () => editor.undo());
 document.getElementById("btn-redo")!.addEventListener("click", () => editor.redo());
-document.getElementById("btn-delete")!.addEventListener("click", () => editor.deleteSelected());
-document.getElementById("btn-edit-label")!.addEventListener("click", () => editor.editSelectedShapeLabel());
 document.getElementById("btn-group")!.addEventListener("click", () => editor.groupSelected());
 document.getElementById("btn-ungroup")!.addEventListener("click", () => editor.ungroupSelected());
 
-// Snap toggle
-const btnSnap = document.getElementById("btn-snap") as HTMLButtonElement | null;
-btnSnap?.classList.toggle("active", editor.snapToGrid);
-btnSnap?.addEventListener("click", () => {
-  const on = editor.toggleSnap();
-  btnSnap.classList.toggle("active", on);
+// Style cycle button
+const STYLE_LABELS: Record<string, string> = { plain: "🖊 Style: Plain", sketch: "✏ Style: Sketch", pencil: "✎ Style: Pencil" };
+const btnStyle = document.getElementById("btn-style") as HTMLButtonElement | null;
+function syncStyleButton(): void {
+  if (btnStyle) {
+    btnStyle.textContent = STYLE_LABELS[editor.renderStyle] ?? STYLE_LABELS.plain;
+    btnStyle.classList.toggle("active", editor.renderStyle !== "plain");
+  }
+}
+btnStyle?.addEventListener("click", () => {
+  editor.cycleRenderStyle();
+  syncStyleButton();
 });
+
+// Keyboard shortcut: H for style cycling
+window.addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) { return; }
+  if (e.key.toLowerCase() === "h" && !e.ctrlKey && !e.metaKey) {
+    editor.cycleRenderStyle();
+    syncStyleButton();
+  }
+}, { capture: false });
 
 document.getElementById("btn-save")!.addEventListener("click", () => {
   const shapes = editor.getShapes();
   const { width, height } = editor.getCanvasSize();
-  const svgContent = shapesToSvgString(shapes, width, height);
+  const svgContent = shapesToSvgString(shapes, width, height, editor.renderStyle);
   postMessage({ command: "save", svgContent });
 });
 
@@ -347,7 +353,7 @@ btnSaveTemplateSvg.addEventListener("click", () => {
     return;
   }
   const { width, height } = editor.getCanvasSize();
-  const svgContent = shapesToSvgString(shapes, width, height);
+  const svgContent = shapesToSvgString(shapes, width, height, editor.renderStyle);
   postMessage({ command: "saveTemplateSvg", name, svgContent });
 });
 
@@ -453,7 +459,51 @@ function renderTemplateList(items: DiagramTemplateSummary[]): void {
 }
 
 // --- SVG generation (client-side for save) ---
-function shapesToSvgString(shapes: Shape[], width: number, height: number): string {
+
+// ── Sketch SVG helpers (mirrored from svgExporter) ──────────────
+function _skRand(seed: number): () => number {
+  let s = (seed ^ 0xdeadbeef) >>> 0;
+  return (): number => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 0x100000000; };
+}
+function _skSeed(id: string): number {
+  let h = 0x12345678;
+  for (let i = 0; i < id.length; i++) { h = (Math.imul(h ^ id.charCodeAt(i), 0x9e3779b9)) >>> 0; }
+  return h;
+}
+function _sv(v: number): string { return v.toFixed(2); }
+function _skSeg(x1: number, y1: number, x2: number, y2: number, rand: () => number): string {
+  const dx = x2 - x1, dy = y2 - y1, len = Math.sqrt(dx * dx + dy * dy);
+  const nx = len > 0.1 ? -dy / len : 0, ny = len > 0.1 ? dx / len : 0;
+  const r = () => rand() - 0.5, mag = Math.min(3, len * 0.015 + 1);
+  const cpx = (x1 + x2) / 2 + nx * r() * mag * 2 + r() * mag;
+  const cpy = (y1 + y2) / 2 + ny * r() * mag * 2 + r() * mag;
+  return `M ${_sv(x1 + r() * 1.2)} ${_sv(y1 + r() * 1.2)} Q ${_sv(cpx)} ${_sv(cpy)} ${_sv(x2 + r() * 1.2)} ${_sv(y2 + r() * 1.2)}`;
+}
+function _skRect(x: number, y: number, w: number, h: number, rand: () => number): string {
+  const ov = () => (rand() - 0.5) * 2.5;
+  return [
+    _skSeg(x + ov(), y + ov(), x + w + ov(), y + ov(), rand),
+    _skSeg(x + w + ov(), y + ov(), x + w + ov(), y + h + ov(), rand),
+    _skSeg(x + w + ov(), y + h + ov(), x + ov(), y + h + ov(), rand),
+    _skSeg(x + ov(), y + h + ov(), x + ov(), y + ov(), rand),
+  ].join(" ");
+}
+function _skEllipse(cx: number, cy: number, rx: number, ry: number, rand: () => number): string {
+  const segs = Math.max(20, Math.round(Math.PI * (rx + ry) * 0.5));
+  const tStart = (rand() - 0.5) * 0.3;
+  const pts: string[] = [];
+  for (let i = 0; i <= segs; i++) {
+    const t = tStart + (i / segs) * (Math.PI * 2 + 0.12);
+    const wobble = 1 + (rand() - 0.5) * 0.05;
+    const px = cx + Math.cos(t) * rx * wobble, py = cy + Math.sin(t) * ry * wobble;
+    pts.push(i === 0 ? `M ${_sv(px)} ${_sv(py)}` : `L ${_sv(px)} ${_sv(py)}`);
+  }
+  return pts.join(" ");
+}
+// ────────────────────────────────────────────────────────────────
+
+function shapesToSvgString(shapes: Shape[], width: number, height: number, style: "plain" | "sketch" | "pencil" = "plain"): string {
+  const sketchy = style !== "plain";
   const diagramData: DiagramData = { version: 1, shapes };
   const dataAttr = JSON.stringify(diagramData).replace(/'/g, "&#39;");
   const lines: string[] = [];
@@ -474,7 +524,18 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
   for (const shape of shapes) {
     const common = `data-shape-id="${shape.id}" stroke="${shape.stroke}" fill="${shape.fill}" stroke-width="${shape.lineWidth}"`;
     if (shape instanceof RectShape) {
-      lines.push(`  <rect ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"/>`);
+      if (sketchy) {
+        const rand = _skRand(_skSeed(shape.id));
+        if (shape.fill !== "none" && shape.fill !== "transparent") {
+          lines.push(`  <rect data-shape-id="${shape.id}" fill="${shape.fill}" stroke="none" x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"/>`);
+        }
+        if (shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent") {
+          const d = _skRect(shape.x, shape.y, shape.width, shape.height, rand);
+          lines.push(`  <path data-shape-id="${shape.id}" fill="none" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}" d="${d}"/>`);
+        }
+      } else {
+        lines.push(`  <rect ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"/>`);
+      }
       if (shape.label) {
         const lx = shape.x + shape.width / 2;
         const ly = shape.y + shape.height / 2;
@@ -483,14 +544,40 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
         lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
       }
     } else if (shape instanceof EllipseShape) {
-      lines.push(`  <ellipse ${common} cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`);
+      if (sketchy) {
+        const rand = _skRand(_skSeed(shape.id));
+        if (shape.fill !== "none" && shape.fill !== "transparent") {
+          lines.push(`  <ellipse data-shape-id="${shape.id}" fill="${shape.fill}" stroke="none" cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`);
+        }
+        if (shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent") {
+          const d = _skEllipse(shape.cx, shape.cy, Math.max(shape.rx, 0), Math.max(shape.ry, 0), rand);
+          lines.push(`  <path data-shape-id="${shape.id}" fill="none" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}" d="${d}"/>`);
+        }
+      } else {
+        lines.push(`  <ellipse ${common} cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`);
+      }
       if (shape.label) {
         const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
         const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
       }
     } else if (shape instanceof ArrowShape) {
-      lines.push(`  <line ${common} x1="${shape.x1}" y1="${shape.y1}" x2="${shape.x2}" y2="${shape.y2}" marker-end="url(#arrowhead)" style="color:${shape.stroke}"/>`);
+      if (sketchy) {
+        const rand = _skRand(_skSeed(shape.id));
+        const r = () => rand() - 0.5;
+        const shaftD = _skSeg(shape.x1, shape.y1, shape.x2, shape.y2, rand);
+        lines.push(`  <path data-shape-id="${shape.id}" fill="none" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}" d="${shaftD}"/>`);
+        const headLen = 12;
+        const angle = Math.atan2(shape.y2 - shape.y1, shape.x2 - shape.x1);
+        const ex = shape.x2 + r() * 1.0, ey = shape.y2 + r() * 1.0;
+        const hx1 = shape.x2 - headLen * Math.cos(angle - Math.PI / 6) + r() * 1.5;
+        const hy1 = shape.y2 - headLen * Math.sin(angle - Math.PI / 6) + r() * 1.5;
+        const hx2 = shape.x2 - headLen * Math.cos(angle + Math.PI / 6) + r() * 1.5;
+        const hy2 = shape.y2 - headLen * Math.sin(angle + Math.PI / 6) + r() * 1.5;
+        lines.push(`  <polygon data-shape-id="${shape.id}" fill="${shape.stroke}" stroke="none" points="${_sv(ex)},${_sv(ey)} ${_sv(hx1)},${_sv(hy1)} ${_sv(hx2)},${_sv(hy2)}"/>`);
+      } else {
+        lines.push(`  <line ${common} x1="${shape.x1}" y1="${shape.y1}" x2="${shape.x2}" y2="${shape.y2}" marker-end="url(#arrowhead)" style="color:${shape.stroke}"/>`);
+      }
       if (shape.label) {
         const lx = (shape.x1 + shape.x2) / 2;
         const ly = (shape.y1 + shape.y2) / 2 - 10;
@@ -499,23 +586,29 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
         lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
       }
     } else if (shape instanceof BubbleShape) {
-      const x = shape.x;
-      const y = shape.y;
-      const w = shape.width;
-      const h = shape.height;
-      const tailW = Math.min(24, w * 0.25);
-      const tailH = Math.min(18, h * 0.25);
-      const tailX = x + w * 0.35;
-      const path = [
-        `M ${x} ${y}`,
-        `H ${x + w}`,
-        `V ${y + h}`,
-        `H ${tailX + tailW}`,
-        `L ${tailX + tailW * 0.4} ${y + h + tailH}`,
-        `L ${tailX} ${y + h}`,
-        `H ${x}`,
-        "Z",
-      ].join(" ");
+      const x = shape.x, y = shape.y, w = shape.width, h = shape.height;
+      const tailW = Math.min(24, w * 0.25), tailH = Math.min(18, h * 0.25), tailX = x + w * 0.35;
+      let path: string;
+      if (sketchy) {
+        const rand = _skRand(_skSeed(shape.id));
+        const wb = () => (rand() - 0.5) * 2;
+        path = [
+          `M ${_sv(x + wb())} ${_sv(y + wb())}`,
+          `L ${_sv(x + w + wb())} ${_sv(y + wb())}`,
+          `L ${_sv(x + w + wb())} ${_sv(y + h + wb())}`,
+          `L ${_sv(tailX + tailW + wb())} ${_sv(y + h + wb())}`,
+          `L ${_sv(tailX + tailW * 0.4 + wb())} ${_sv(y + h + tailH + wb())}`,
+          `L ${_sv(tailX + wb())} ${_sv(y + h + wb())}`,
+          `L ${_sv(x + wb())} ${_sv(y + h + wb())}`,
+          "Z",
+        ].join(" ");
+      } else {
+        path = [
+          `M ${x} ${y}`, `H ${x + w}`, `V ${y + h}`,
+          `H ${tailX + tailW}`, `L ${tailX + tailW * 0.4} ${y + h + tailH}`,
+          `L ${tailX} ${y + h}`, `H ${x}`, "Z",
+        ].join(" ");
+      }
       lines.push(`  <path ${common} d="${path}"/>`);
       if (shape.label) {
         const lx = shape.x + shape.width / 2;

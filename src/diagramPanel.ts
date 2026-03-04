@@ -341,12 +341,10 @@ export class DiagramPanel {
     <div class="separator"></div>
     <button id="btn-undo" title="Undo (Ctrl+Z)">↶ Undo</button>
     <button id="btn-redo" title="Redo (Ctrl+Y)">↷ Redo</button>
-    <button id="btn-delete" title="Delete selected (Del)">🗑 Delete</button>
-    <button id="btn-edit-label" title="Edit selected label (F2)">✎ Label</button>
-    <button id="btn-group" title="Group selected (Ctrl+G)">Group</button>
-    <button id="btn-ungroup" title="Ungroup selected (Ctrl+Shift+G)">Ungroup</button>
-    <button id="btn-snap" title="Grid Snap (S)">⊞ Snap</button>
+    <button id="btn-group" title="Group selected (Ctrl+Shift+G)">Group</button>
+    <button id="btn-ungroup" title="Ungroup selected (Ctrl+U)">Ungroup</button>
     <div class="row-break"></div>
+    <button id="btn-style" title="Render style (H): Plain → Sketch → Pencil">🖊 Style: Plain</button>
     <div class="separator"></div>
     <input id="template-name" type="text" placeholder="Template name">
     <button id="btn-save-template" title="Save current diagram as template">Save Template</button>

@@ -88,6 +88,9 @@ export class CanvasEditor {
   private _snapToGrid = true;
   private _gridSize = 20;
 
+  // Render style: "plain" | "sketch" | "pencil"
+  private _renderStyle: "plain" | "sketch" | "pencil" = "plain";
+
   // モード状態遷移マシン (hintMode / handleHintMode / objectInsertingMode)
   private readonly stateMachine: EditorStateMachine;
 
@@ -305,6 +308,26 @@ export class CanvasEditor {
     return this._snapToGrid;
   }
 
+  get sketchy(): boolean { return this._renderStyle !== "plain"; }
+  set sketchy(v: boolean) { this._renderStyle = v ? "sketch" : "plain"; this.render(); }
+
+  get renderStyle(): "plain" | "sketch" | "pencil" { return this._renderStyle; }
+  set renderStyle(v: "plain" | "sketch" | "pencil") { this._renderStyle = v; this.render(); }
+
+  cycleRenderStyle(): "plain" | "sketch" | "pencil" {
+    const order: ("plain" | "sketch" | "pencil")[] = ["plain", "sketch", "pencil"];
+    const idx = order.indexOf(this._renderStyle);
+    this._renderStyle = order[(idx + 1) % order.length];
+    this.render();
+    return this._renderStyle;
+  }
+
+  toggleSketchy(): boolean {
+    this._renderStyle = this._renderStyle === "plain" ? "sketch" : "plain";
+    this.render();
+    return this._renderStyle !== "plain";
+  }
+
   undo(): void {
     if (this.undoStack.length === 0) { return; }
     this.redoStack.push(this.cloneShapes());
@@ -449,7 +472,7 @@ export class CanvasEditor {
           return;
         }
         // ツールキー (t/r/e/a/b/g/v/s) は main.ts が処理するのでスルー
-        const toolKeys = ["t", "r", "e", "a", "b", "g", "v", "s"];
+        const toolKeys = ["t", "r", "e", "a", "b", "g", "v"];
         if (!toolKeys.includes(e.key.toLowerCase())) {
           if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
             e.preventDefault();
@@ -745,10 +768,26 @@ export class CanvasEditor {
         this.editSelectedShapeLabel();
       }
       if (e.ctrlKey && e.key.toLowerCase() === "g" && !e.shiftKey) {
+        // Ctrl+G → Escape 同等の動き
+        e.preventDefault();
+        if (this.helpOverlayEl) { this.hideHelpOverlay(); return; }
+        if (this.activeHandleForKbd) {
+          this.activeHandleForKbd = undefined;
+          this.render();
+          return;
+        }
+        if (this.selectedIds.size > 0) {
+          this.selectedIds.clear();
+          this.onSelectionChange(new Set());
+          this.render();
+        }
+        return;
+      }
+      if (e.ctrlKey && e.key.toLowerCase() === "g" && e.shiftKey) {
         e.preventDefault();
         this.groupSelected();
       }
-      if (e.ctrlKey && e.key.toLowerCase() === "g" && e.shiftKey) {
+      if (e.ctrlKey && e.key.toLowerCase() === "u") {
         e.preventDefault();
         this.ungroupSelected();
       }
@@ -835,7 +874,7 @@ export class CanvasEditor {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const preview = this.currentTool.getPreview();
     const rubberBand = this.selectTool.getRubberband();
-    renderShapes(this.ctx, this.shapes, preview, this.selectedIds, rubberBand);
+    renderShapes(this.ctx, this.shapes, preview, this.selectedIds, rubberBand, this._renderStyle);
     if (this.stateMachine.mode === "hintMode") { this.drawHintLabels(); }
     if (this.stateMachine.mode === "handleHintMode") { this.drawHandleHints(); }
     if (this.activeHandleForKbd && this.selectedIds.size === 1) { this.drawActiveHandleIndicator(); }
@@ -961,15 +1000,16 @@ export class CanvasEditor {
       ["k / ↑",      "上へ移動"],
       ["l / →",      "右へ移動"],
       ["Ctrl + ←↑↓→","1px ずつ微調整"],
-      ["Escape",     "ハンドル解除 → 選択解除"],
+      ["Escape / Ctrl+G", "ハンドル解除 → 選択解除"],
       ["Del / BS",   "図形を削除"],
       ["F2",         "ラベル編集"],
       ["Ctrl+Z",     "元に戻す"],
       ["Ctrl+Y",     "やり直す"],
       ["Ctrl+C",     "コピー"],
       ["Ctrl+V",     "貼り付け"],
-      ["Ctrl+G",     "グループ化"],
-      ["Ctrl+Shift+G","グループ解除"],
+      ["Ctrl+Shift+G","グループ化"],
+      ["Ctrl+U",     "グループ解除"],
+      ["H",          "描画スタイル切替 (Plain→Sketch→Pencil)"],
       ["?",          "このヘルプを表示/非表示"],
     ];
 
@@ -1511,7 +1551,10 @@ export class CanvasEditor {
     e.preventDefault();
     const pt = this.getPoint(e);
     const shape = this.findShapeAt(pt);
-    if (!shape) { return; }
+    if (!shape) {
+      this.showCanvasContextMenu(pt, e);
+      return;
+    }
 
     this.selectShape(shape);
     this.showContextMenu(shape, pt, e);
@@ -1524,6 +1567,59 @@ export class CanvasEditor {
       this.switchToSelect();
     }
     this.render();
+  }
+
+  /** Show context menu on empty canvas area */
+  private showCanvasContextMenu(pt: Point, e: MouseEvent): void {
+    this.dismissPopup();
+
+    const container = this.canvas.parentElement!;
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const contRect = container.getBoundingClientRect();
+
+    const menu = document.createElement("div");
+    menu.className = "ctx-menu";
+    menu.style.left = `${canvasRect.left - contRect.left + pt.x}px`;
+    menu.style.top = `${canvasRect.top - contRect.top + pt.y}px`;
+
+    const items: { label: string; action: () => void }[] = [
+      { label: "Paste", action: () => this.paste() },
+      { label: "Undo", action: () => this.undo() },
+      { label: "Redo", action: () => this.redo() },
+      { label: "Select All", action: () => { this.selectedIds = new Set(this.shapes.map(s => s.id)); this.onSelectionChange(new Set(this.selectedIds)); this.render(); } },
+    ];
+
+    for (const item of items) {
+      const btn = document.createElement("div");
+      btn.className = "ctx-menu-item";
+      btn.textContent = item.label;
+      btn.addEventListener("mousedown", (ev) => {
+        ev.stopPropagation();
+        cleanup();
+        item.action();
+      });
+      menu.appendChild(btn);
+    }
+
+    container.appendChild(menu);
+
+    const cleanup = () => {
+      this.activePopupCleanup = undefined;
+      window.removeEventListener("mousedown", onOutside);
+      window.removeEventListener("keydown", onEsc);
+      if (menu.parentElement) { menu.parentElement.removeChild(menu); }
+    };
+    const onOutside = (ev: MouseEvent) => {
+      if (!menu.contains(ev.target as Node)) { cleanup(); }
+    };
+    const onEsc = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") { cleanup(); }
+    };
+    requestAnimationFrame(() => {
+      window.addEventListener("mousedown", onOutside);
+      window.addEventListener("keydown", onEsc);
+    });
+    this.activePopupCleanup = cleanup;
   }
 
   /** Open inline editor appropriate for the shape type */
