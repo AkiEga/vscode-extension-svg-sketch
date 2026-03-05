@@ -1,4 +1,4 @@
-import { Shape, RectShape, EllipseShape, ArrowShape, TableShape, BubbleShape, TextShape, ImageShape } from "../shared";
+import { Shape, RectShape, EllipseShape, ArrowShape, TableShape, TextShape, ImageShape } from "../shared";
 import type { Point } from "../shared";
 import { shapeDefaults } from "../shared";
 import { getShapeHandles } from "./tools/SelectTool";
@@ -325,17 +325,6 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape, style: "plain" |
       break;
     }
 
-    case "bubble": {
-      const s = shape as BubbleShape;
-      if (useSketchy) {
-        drawBubble(ctx, s, makeRand(seedOf(s)));
-      } else {
-        drawBubbleStraight(ctx, s);
-      }
-      drawShapeLabel(ctx, s, s.x + s.width / 2, s.y + s.height / 2);
-      break;
-    }
-
     case "text": {
       const s = shape as TextShape;
       ctx.font = `${s.fontSize}px ${s.fontFamily ?? shapeDefaults.fontFamily}`;
@@ -380,69 +369,6 @@ function drawImageShape(ctx: CanvasRenderingContext2D, shape: ImageShape, drawSt
 
   if (drawStroke) {
     ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-  }
-}
-
-function drawBubble(ctx: CanvasRenderingContext2D, shape: BubbleShape, rand: () => number): void {
-  const drawStroke = hasVisibleStroke(shape);
-  const radius = 10;
-  const x = shape.x;
-  const y = shape.y;
-  const w = shape.width;
-  const h = shape.height;
-  const wb = () => (rand() - 0.5) * 2;
-
-  ctx.beginPath();
-  ctx.moveTo(x + radius + wb(), y + wb());
-  ctx.lineTo(x + w - radius + wb(), y + wb());
-  ctx.quadraticCurveTo(x + w + wb(), y + wb(), x + w + wb(), y + radius + wb());
-  ctx.lineTo(x + w + wb(), y + h - radius + wb());
-  ctx.quadraticCurveTo(x + w + wb(), y + h + wb(), x + w - radius + wb(), y + h + wb());
-  ctx.lineTo(x + w * 0.6 + wb(), y + h + wb());
-  ctx.lineTo(x + w * 0.5 + wb(), y + h + 16 + wb());
-  ctx.lineTo(x + w * 0.45 + wb(), y + h + wb());
-  ctx.lineTo(x + radius + wb(), y + h + wb());
-  ctx.quadraticCurveTo(x + wb(), y + h + wb(), x + wb(), y + h - radius + wb());
-  ctx.lineTo(x + wb(), y + radius + wb());
-  ctx.quadraticCurveTo(x + wb(), y + wb(), x + radius + wb(), y + wb());
-  ctx.closePath();
-
-  if (shape.fill !== "none" && shape.fill !== "transparent") {
-    ctx.fill();
-  }
-  if (drawStroke) {
-    ctx.stroke();
-  }
-}
-
-function drawBubbleStraight(ctx: CanvasRenderingContext2D, shape: BubbleShape): void {
-  const drawStroke = hasVisibleStroke(shape);
-  const radius = 10;
-  const x = shape.x;
-  const y = shape.y;
-  const w = shape.width;
-  const h = shape.height;
-
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + w - radius, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
-  ctx.lineTo(x + w, y + h - radius);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-  ctx.lineTo(x + w * 0.6, y + h);
-  ctx.lineTo(x + w * 0.5, y + h + 16);
-  ctx.lineTo(x + w * 0.45, y + h);
-  ctx.lineTo(x + radius, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-
-  if (shape.fill !== "none" && shape.fill !== "transparent") {
-    ctx.fill();
-  }
-  if (drawStroke) {
-    ctx.stroke();
   }
 }
 
@@ -664,8 +590,8 @@ function drawSelectionIndicator(ctx: CanvasRenderingContext2D, shape: Shape): vo
   // Draw corner handles
   ctx.setLineDash([]);
   ctx.fillStyle = "#4a90d9";
-  // Rect, Ellipse, Bubble show only TL/BR handles
-  const tlBrOnly = shape instanceof RectShape || shape instanceof EllipseShape || shape instanceof BubbleShape;
+  // Rect、Ellipseは左上/右下のみのハンドルを表示
+  const tlBrOnly = shape instanceof RectShape || shape instanceof EllipseShape;
   const corners = tlBrOnly ? [h.tl, h.br] : [h.tl, h.tr, h.bl, h.br];
   for (const c of corners) {
     ctx.fillRect(c.x - HANDLE_SIZE / 2, c.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);

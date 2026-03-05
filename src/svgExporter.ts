@@ -158,36 +158,6 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
         }
         break;
       }
-      case "bubble": {
-        const rand = sketchRand(svgSeed(shape.id));
-        const wb = () => (rand() - 0.5) * 2;
-        const x = shape.x;
-        const y = shape.y;
-        const w = shape.width;
-        const h = shape.height;
-        const tailW = Math.min(24, w * 0.25);
-        const tailH = Math.min(18, h * 0.25);
-        const tailX = x + w * 0.35;
-        const path = [
-          `M ${sv(x + wb())} ${sv(y + wb())}`,
-          `L ${sv(x + w + wb())} ${sv(y + wb())}`,
-          `L ${sv(x + w + wb())} ${sv(y + h + wb())}`,
-          `L ${sv(tailX + tailW + wb())} ${sv(y + h + wb())}`,
-          `L ${sv(tailX + tailW * 0.4 + wb())} ${sv(y + h + tailH + wb())}`,
-          `L ${sv(tailX + wb())} ${sv(y + h + wb())}`,
-          `L ${sv(x + wb())} ${sv(y + h + wb())}`,
-          "Z",
-        ].join(" ");
-        lines.push(`  <path ${common} d="${path}"/>`);
-        if (shape.label) {
-          const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
-          const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
-          const fc = shape.labelFontColor ?? shape.stroke;
-          const attrs = getLabelSvgAttrs(shape, fs, shape.x + shape.width / 2, shape.y + shape.height / 2);
-          lines.push(labelToSvgText(shape.label, attrs.x, attrs.y, fs, ff, fc, attrs.attrs));
-        }
-        break;
-      }
       case "text":
         lines.push(
           `  <text ${common} x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize}" font-family="${shape.fontFamily ?? shapeDefaults.fontFamily}" fill="${shape.fontColor ?? shape.stroke}">${escapeXml(shape.text)}</text>`

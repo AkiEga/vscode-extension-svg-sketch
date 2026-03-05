@@ -1,5 +1,5 @@
 /** Supported shape types */
-export type ShapeType = "rect" | "ellipse" | "arrow" | "bubble" | "text" | "table" | "image";
+export type ShapeType = "rect" | "ellipse" | "arrow" | "text" | "table" | "image";
 export type LabelHorizontalAlign = "left" | "center" | "right";
 export type LabelVerticalAlign = "top" | "middle" | "bottom";
 
@@ -203,89 +203,6 @@ export class ArrowShape extends Shape {
   }
 }
 
-export class BubbleShape extends Shape {
-  readonly type = "bubble" as const;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  label?: string;
-  labelFontSize?: number;
-  labelFontFamily?: string;
-  labelFontColor?: string;
-  labelAlignH?: LabelHorizontalAlign;
-  labelAlignV?: LabelVerticalAlign;
-
-  constructor(data: { id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }) {
-    super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
-    this.x = data.x;
-    this.y = data.y;
-    this.width = data.width;
-    this.height = data.height;
-    this.label = data.label;
-    this.labelFontSize = data.labelFontSize;
-    this.labelFontFamily = data.labelFontFamily;
-    this.labelFontColor = data.labelFontColor;
-    this.labelAlignH = data.labelAlignH;
-    this.labelAlignV = data.labelAlignV;
-  }
-
-  clone(newId?: string): BubbleShape {
-    return new BubbleShape({
-      id: newId ?? this.id,
-      x: this.x,
-      y: this.y,
-      width: this.width,
-      height: this.height,
-      stroke: this.stroke,
-      fill: this.fill,
-      lineWidth: this.lineWidth,
-      label: this.label,
-      labelFontSize: this.labelFontSize,
-      labelFontFamily: this.labelFontFamily,
-      labelFontColor: this.labelFontColor,
-      labelAlignH: this.labelAlignH,
-      labelAlignV: this.labelAlignV,
-      groupId: this.groupId,
-    });
-  }
-
-  hitTest(pt: Point, tolerance = 6): boolean {
-    return (
-      pt.x >= this.x - tolerance &&
-      pt.x <= this.x + this.width + tolerance &&
-      pt.y >= this.y - tolerance &&
-      pt.y <= this.y + this.height + 16 + tolerance
-    );
-  }
-
-  getBounds(): Bounds {
-    return { minX: this.x, minY: this.y, maxX: this.x + this.width, maxY: this.y + this.height + 16 };
-  }
-
-  getOrigin(): Point { return { x: this.x, y: this.y }; }
-
-  translate(dx: number, dy: number): BubbleShape {
-    return new BubbleShape({
-      id: this.id,
-      x: this.x + dx,
-      y: this.y + dy,
-      width: this.width,
-      height: this.height,
-      stroke: this.stroke,
-      fill: this.fill,
-      lineWidth: this.lineWidth,
-      label: this.label,
-      labelFontSize: this.labelFontSize,
-      labelFontFamily: this.labelFontFamily,
-      labelFontColor: this.labelFontColor,
-      labelAlignH: this.labelAlignH,
-      labelAlignV: this.labelAlignV,
-      groupId: this.groupId,
-    });
-  }
-}
-
 export class TextShape extends Shape {
   readonly type = "text" as const;
   x: number;
@@ -472,14 +389,13 @@ function distToSegment(p: Point, a: Point, b: Point): number {
 }
 
 /** Concrete shape union — switch(shape.type) で型絞り込み可能 */
-export type ConcreteShape = RectShape | EllipseShape | ArrowShape | BubbleShape | TextShape | TableShape | ImageShape;
+export type ConcreteShape = RectShape | EllipseShape | ArrowShape | TextShape | TableShape | ImageShape;
 
 /** Plain-object shape representation (for JSON deserialization) */
 export type ShapeJSON =
   | { type: "rect"; id: string; x: number; y: number; width: number; height: number; cornerRadius?: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }
   | { type: "ellipse"; id: string; cx: number; cy: number; rx: number; ry: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }
   | { type: "arrow"; id: string; x1: number; y1: number; x2: number; y2: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }
-  | { type: "bubble"; id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }
   | { type: "text"; id: string; x: number; y: number; text: string; fontSize: number; fontFamily?: string; fontColor?: string; stroke: string; fill: string; lineWidth: number; groupId?: string }
   | { type: "table"; id: string; x: number; y: number; width: number; height: number; rows: number; cols: number; cells: string[][]; fontSize: number; fontFamily?: string; fontColor?: string; stroke: string; fill: string; lineWidth: number; groupId?: string }
   | { type: "image"; id: string; x: number; y: number; width: number; height: number; dataUrl: string; stroke: string; fill: string; lineWidth: number; groupId?: string };
@@ -490,7 +406,6 @@ export function reviveShape(data: ShapeJSON): Shape {
     case "rect": return new RectShape(data);
     case "ellipse": return new EllipseShape(data);
     case "arrow": return new ArrowShape(data);
-    case "bubble": return new BubbleShape(data);
     case "text": return new TextShape(data);
     case "table": return new TableShape(data);
     case "image": return new ImageShape(data);
@@ -546,7 +461,7 @@ export type ExtToWebviewMessage =
   | { command: "templateDeleted"; templateId: string }
   | { command: "error"; message: string };
 
-export type ToolType = "rect" | "ellipse" | "arrow" | "bubble" | "text" | "table" | "select";
+export type ToolType = "rect" | "ellipse" | "arrow" | "text" | "table" | "select";
 
 /** Diagram data for serialization */
 export interface DiagramData {

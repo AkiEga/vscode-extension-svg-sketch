@@ -7,7 +7,7 @@
 
 import { CanvasEditor } from "../webview/canvas/CanvasEditor";
 import { DEFAULT_DRAW_STYLE, resolveDrawStyleFromShapes } from "../webview/canvas/drawStyle";
-import { reviveShapes, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape, ImageShape, shapeDefaults } from "../webview/shared";
+import { reviveShapes, RectShape, EllipseShape, ArrowShape, TextShape, TableShape, ImageShape, shapeDefaults } from "../webview/shared";
 import type {
   ToolType,
   DiagramData,
@@ -108,7 +108,7 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   const keyMap: Record<string, ToolType> = {
-    v: "select", r: "rect", e: "ellipse", a: "arrow", t: "text", b: "bubble", g: "table",
+    v: "select", r: "rect", e: "ellipse", a: "arrow", t: "text", g: "table",
   };
   const tool = keyMap[e.key.toLowerCase()];
   if (tool) {
@@ -365,19 +365,6 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number): stri
       if (shape.label) {
         const lx = (shape.x1 + shape.x2) / 2;
         const ly = (shape.y1 + shape.y2) / 2 - 10;
-        const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
-        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
-      }
-    } else if (shape instanceof BubbleShape) {
-      const x = shape.x, y = shape.y, w = shape.width, h = shape.height;
-      const tailW = Math.min(24, w * 0.25);
-      const tailH = Math.min(18, h * 0.25);
-      const tailX = x + w * 0.35;
-      const path = `M ${x} ${y} H ${x + w} V ${y + h} H ${tailX + tailW} L ${tailX + tailW * 0.4} ${y + h + tailH} L ${tailX} ${y + h} H ${x} Z`;
-      lines.push(`  <path ${common} d="${path}"/>`);
-      if (shape.label) {
-        const lx = shape.x + shape.width / 2;
-        const ly = shape.y + shape.height / 2;
         const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
         lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${escapeXml(shape.label)}</text>`);
       }

@@ -1,9 +1,8 @@
 import type { Shape, ToolType, DrawStyle, Point, Tool } from "../shared";
-import { hitTest, TextShape, TableShape, RectShape, EllipseShape, ArrowShape, BubbleShape, ImageShape, nextId } from "../shared";
+import { hitTest, TextShape, TableShape, RectShape, EllipseShape, ArrowShape, ImageShape, nextId } from "../shared";
 import { RectTool } from "./tools/RectTool";
 import { EllipseTool } from "./tools/EllipseTool";
 import { ArrowTool } from "./tools/ArrowTool";
-import { BubbleTool } from "./tools/BubbleTool";
 import { TextTool } from "./tools/TextTool";
 import { TableTool, type TableConfigRequest } from "./tools/TableTool";
 import { SelectTool, getShapeHandles } from "./tools/SelectTool";
@@ -40,7 +39,7 @@ function applyHandleDelta(shape: Shape, handle: DragHandleId, dx: number, dy: nu
     shape.ry = Math.max(5, shape.ry + rySign * dy / 2);
     return;
   }
-  if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TableShape || shape instanceof ImageShape) {
+  if (shape instanceof RectShape || shape instanceof TableShape || shape instanceof ImageShape) {
     const s = shape as { x: number; y: number; width: number; height: number };
     const MIN = 10;
     switch (handle) {
@@ -149,9 +148,6 @@ export class CanvasEditor {
       case "arrow":
         this.currentTool = new ArrowTool();
         break;
-      case "bubble":
-        this.currentTool = new BubbleTool();
-        break;
       case "text": {
         const textTool = new TextTool();
         textTool.onTextRequest = (req) => this.showTextInput(req.pt, req.style);
@@ -196,7 +192,7 @@ export class CanvasEditor {
             if (style.fontFamily !== undefined) { shape.fontFamily = style.fontFamily; }
             if (style.fontColor !== undefined) { shape.fontColor = style.fontColor; }
           }
-          if (shape instanceof RectShape || shape instanceof EllipseShape || shape instanceof ArrowShape || shape instanceof BubbleShape) {
+          if (shape instanceof RectShape || shape instanceof EllipseShape || shape instanceof ArrowShape) {
             if (style.fontSize !== undefined) { shape.labelFontSize = style.fontSize; }
             if (style.fontFamily !== undefined) { shape.labelFontFamily = style.fontFamily; }
             if (style.fontColor !== undefined) { shape.labelFontColor = style.fontColor; }
@@ -430,14 +426,6 @@ export class CanvasEditor {
           labelAlignV: this.style.labelAlignV,
         });
         break;
-      case "bubble":
-        shape = new BubbleShape({
-          id: nextId(), x: pt.x, y: pt.y, width: defaultW, height: defaultH,
-          stroke: this.style.stroke, fill: this.style.fill, lineWidth: this.style.lineWidth,
-          labelAlignH: this.style.labelAlignH,
-          labelAlignV: this.style.labelAlignV,
-        });
-        break;
       case "text":
         shape = new TextShape({
           id: nextId(), x: pt.x, y: pt.y + this.style.fontSize,
@@ -484,7 +472,7 @@ export class CanvasEditor {
     const minDiameter = gs;
     const minRadius = Math.max(1, gs / 2);
 
-    if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TableShape || shape instanceof ImageShape) {
+    if (shape instanceof RectShape || shape instanceof TableShape || shape instanceof ImageShape) {
       shape.x = snapValue(shape.x, gs);
       shape.y = snapValue(shape.y, gs);
       shape.width = Math.max(minDiameter, snapValue(shape.width, gs));
@@ -1020,7 +1008,7 @@ export class CanvasEditor {
               shape.x2 += dx; shape.y2 += dy;
             } else if (shape instanceof EllipseShape) {
               shape.cx += dx; shape.cy += dy;
-            } else if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TextShape || shape instanceof TableShape || shape instanceof ImageShape) {
+            } else if (shape instanceof RectShape || shape instanceof TextShape || shape instanceof TableShape || shape instanceof ImageShape) {
               shape.x += dx; shape.y += dy;
             }
           }
@@ -1265,6 +1253,10 @@ export class CanvasEditor {
     if (shape instanceof ArrowShape) {
       entries.push({ pt: { x: shape.x1, y: shape.y1 }, key: "s" });
       entries.push({ pt: { x: shape.x2, y: shape.y2 }, key: "e" });
+    } else if (shape instanceof RectShape || shape instanceof EllipseShape) {
+      const h = getShapeHandles(shape);
+      entries.push({ pt: h.tl, key: "s" });
+      entries.push({ pt: h.br, key: "e" });
     } else {
       const h = getShapeHandles(shape);
       entries.push({ pt: h.tl, key: "1" });
@@ -1786,12 +1778,12 @@ export class CanvasEditor {
       this.editTextShape(shape);
       return;
     }
-    if (shape instanceof RectShape || shape instanceof EllipseShape || shape instanceof ArrowShape || shape instanceof BubbleShape) {
+    if (shape instanceof RectShape || shape instanceof EllipseShape || shape instanceof ArrowShape) {
       this.editShapeLabel(shape);
     }
   }
 
-  private editShapeLabel(shape: RectShape | EllipseShape | ArrowShape | BubbleShape): void {
+  private editShapeLabel(shape: RectShape | EllipseShape | ArrowShape): void {
     const b = shape.getBounds();
     const cx = (b.minX + b.maxX) / 2;
     const cy = (b.minY + b.maxY) / 2;
@@ -2308,8 +2300,7 @@ export class CanvasEditor {
       case "rect":
       case "ellipse":
       case "arrow":
-      case "bubble":
-        this.editShapeLabel(shape as RectShape | EllipseShape | ArrowShape | BubbleShape);
+        this.editShapeLabel(shape as RectShape | EllipseShape | ArrowShape);
         break;
       case "text":
         this.editTextShape(shape as TextShape);
@@ -2341,8 +2332,7 @@ export class CanvasEditor {
       case "rect":
       case "ellipse":
       case "arrow":
-      case "bubble":
-        items.push({ label: "Edit Label", action: () => this.editShapeLabel(shape as RectShape | EllipseShape | ArrowShape | BubbleShape) });
+        items.push({ label: "Edit Label", action: () => this.editShapeLabel(shape as RectShape | EllipseShape | ArrowShape) });
         break;
       case "text":
         items.push({ label: "Edit Text", action: () => this.editTextShape(shape as TextShape) });

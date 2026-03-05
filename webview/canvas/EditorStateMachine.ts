@@ -1,5 +1,5 @@
 import type { Shape, ToolType } from "../shared";
-import { ArrowShape } from "../shared";
+import { ArrowShape, RectShape, EllipseShape } from "../shared";
 import type { DragHandleId } from "./tools/SelectTool";
 
 export type EditorMode = "idle" | "hintMode" | "handleHintMode" | "objectInsertingMode" | "objSelect" | "objEdit";
@@ -109,6 +109,10 @@ export class EditorStateMachine {
     if (shape instanceof ArrowShape) {
       map.set("s", "start");
       map.set("e", "end");
+    } else if (shape instanceof RectShape || shape instanceof EllipseShape) {
+      // Rect/Ellipse: 左上(s) と右下(e) のみ
+      map.set("s", "tl");
+      map.set("e", "br");
     } else {
       // 数字キー: 1=tl, 2=tr, 3=bl, 4=br (位置イメージ)
       map.set("1", "tl");

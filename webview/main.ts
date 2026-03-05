@@ -1,6 +1,6 @@
 import { CanvasEditor } from "./canvas/CanvasEditor";
 import { DEFAULT_DRAW_STYLE, resolveDrawStyleFromShapes, rebuildDefaultDrawStyle } from "./canvas/drawStyle";
-import { reviveShapes, RectShape, EllipseShape, ArrowShape, BubbleShape, TextShape, TableShape, ImageShape, applyCustomDefaults, shapeDefaults } from "./shared";
+import { reviveShapes, RectShape, EllipseShape, ArrowShape, TextShape, TableShape, ImageShape, applyCustomDefaults, shapeDefaults } from "./shared";
 import type {
   ToolType,
   DiagramData,
@@ -633,7 +633,7 @@ function _skEllipse(cx: number, cy: number, rx: number, ry: number, rand: () => 
 // ────────────────────────────────────────────────────────────────
 
 function resolveSvgLabelPosition(
-  shape: RectShape | EllipseShape | ArrowShape | BubbleShape,
+  shape: RectShape | EllipseShape | ArrowShape,
   defaultX: number,
   defaultY: number,
   fontSize: number,
@@ -753,39 +753,6 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number, style
         const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
         const fc = shape.labelFontColor ?? shape.stroke;
         const pos = resolveSvgLabelPosition(shape, lx, ly, fs);
-        const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${pos.x}" y="${pos.y}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="${pos.anchor}" dominant-baseline="${pos.baseline}">${esc}</text>`);
-      }
-    } else if (shape instanceof BubbleShape) {
-      const x = shape.x, y = shape.y, w = shape.width, h = shape.height;
-      const tailW = Math.min(24, w * 0.25), tailH = Math.min(18, h * 0.25), tailX = x + w * 0.35;
-      let path: string;
-      if (sketchy) {
-        const rand = _skRand(_skSeed(shape.id));
-        const wb = () => (rand() - 0.5) * 2;
-        path = [
-          `M ${_sv(x + wb())} ${_sv(y + wb())}`,
-          `L ${_sv(x + w + wb())} ${_sv(y + wb())}`,
-          `L ${_sv(x + w + wb())} ${_sv(y + h + wb())}`,
-          `L ${_sv(tailX + tailW + wb())} ${_sv(y + h + wb())}`,
-          `L ${_sv(tailX + tailW * 0.4 + wb())} ${_sv(y + h + tailH + wb())}`,
-          `L ${_sv(tailX + wb())} ${_sv(y + h + wb())}`,
-          `L ${_sv(x + wb())} ${_sv(y + h + wb())}`,
-          "Z",
-        ].join(" ");
-      } else {
-        path = [
-          `M ${x} ${y}`, `H ${x + w}`, `V ${y + h}`,
-          `H ${tailX + tailW}`, `L ${tailX + tailW * 0.4} ${y + h + tailH}`,
-          `L ${tailX} ${y + h}`, `H ${x}`, "Z",
-        ].join(" ");
-      }
-      lines.push(`  <path ${common} d="${path}"/>`);
-      if (shape.label) {
-        const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
-        const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
-        const fc = shape.labelFontColor ?? shape.stroke;
-        const pos = resolveSvgLabelPosition(shape, shape.x + shape.width / 2, shape.y + shape.height / 2, fs);
         const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         lines.push(`  <text x="${pos.x}" y="${pos.y}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="${pos.anchor}" dominant-baseline="${pos.baseline}">${esc}</text>`);
       }

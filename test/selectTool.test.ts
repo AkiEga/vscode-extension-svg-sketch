@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { SelectTool } from "../webview/canvas/tools/SelectTool";
-import { RectShape, EllipseShape, ArrowShape, BubbleShape, type Shape } from "../src/types";
+import { RectShape, EllipseShape, ArrowShape, type Shape } from "../src/types";
 import type { DrawStyle } from "../webview/shared";
 
 const style: DrawStyle = { stroke: "#000", fill: "#fff", lineWidth: 2 };
@@ -245,58 +245,6 @@ describe("SelectTool – handle resize", () => {
     expect(arrow.y1).toBe(100);
     expect(arrow.x2).toBe(350);
     expect(arrow.y2).toBe(250);
-  });
-
-  it("bubble のハンドルドラッグで消失せずサイズ変更できる", () => {
-    const bubble = new BubbleShape({
-      id: "b1", x: 120, y: 120, width: 120, height: 80,
-      stroke: "#000", fill: "#fff", lineWidth: 2,
-    });
-    shapes = [bubble];
-    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
-
-    // select bubble
-    tool.onMouseDown({ x: 160, y: 150 }, style);
-    tool.onMouseUp({ x: 160, y: 150 });
-
-    // BR handle ~= (x+width+4, y+height+16+4)
-    tool.onMouseDown({ x: 244, y: 220 }, style);
-    tool.onMouseMove({ x: 274, y: 250 });
-    tool.onMouseUp({ x: 274, y: 250 });
-
-    expect(Number.isFinite(bubble.x)).toBe(true);
-    expect(Number.isFinite(bubble.y)).toBe(true);
-    expect(Number.isFinite(bubble.width)).toBe(true);
-    expect(Number.isFinite(bubble.height)).toBe(true);
-    expect(bubble.width).toBeGreaterThan(0);
-    expect(bubble.height).toBeGreaterThan(0);
-  });
-
-  it("bubble を通常ドラッグ移動しても消失しない", () => {
-    const bubble = new BubbleShape({
-      id: "b1", x: 120, y: 120, width: 120, height: 80,
-      stroke: "#000", fill: "#fff", lineWidth: 2,
-    });
-    shapes = [bubble];
-    tool = new SelectTool(shapes, (ids) => { selectedIds = new Set(ids); }, () => { undoPushCount++; });
-
-    // select bubble
-    tool.onMouseDown({ x: 160, y: 150 }, style);
-    tool.onMouseUp({ x: 160, y: 150 });
-
-    // body drag
-    tool.onMouseDown({ x: 160, y: 150 }, style);
-    tool.onMouseMove({ x: 200, y: 190 });
-    tool.onMouseUp({ x: 200, y: 190 });
-
-    expect(Number.isFinite(bubble.x)).toBe(true);
-    expect(Number.isFinite(bubble.y)).toBe(true);
-    expect(Number.isFinite(bubble.width)).toBe(true);
-    expect(Number.isFinite(bubble.height)).toBe(true);
-    expect(bubble.width).toBe(120);
-    expect(bubble.height).toBe(80);
-    expect(bubble.x).toBe(160);
-    expect(bubble.y).toBe(160);
   });
 
   it("ドラッグ中に onUndoPush が1回だけ呼ばれる", () => {
