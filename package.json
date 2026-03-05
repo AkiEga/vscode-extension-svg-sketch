@@ -28,6 +28,10 @@
       {
         "command": "svg-sketch.editSvg",
         "title": "SVG Sketch: Edit SVG"
+      },
+      {
+        "command": "svg-sketch.createSvgFile",
+        "title": "SVG Sketch: Create SVG File"
       }
     ],
     "menus": {
@@ -58,10 +62,15 @@
           "default": "",
           "description": "Path to a custom SVG file that defines default shape styles. Leave empty to use the built-in defaults. The SVG must follow the same format as the bundled shapeDefaults.svg."
         },
+        "svg-sketch.svgOutputDir": {
+          "type": "string",
+          "default": "images",
+          "description": "Directory to save SVG files when using the 'Create SVG File' command (relative to workspace root or current file directory)."
+        },
         "svg-sketch.templateDir": {
           "type": "string",
-          "default": ".svg-sketch/templates",
-          "description": "Directory to store diagram templates (relative to workspace root)"
+          "default": "",
+          "description": "Directory to store diagram templates (relative to workspace root). Leave empty to disable template features."
         },
         "svg-sketch.defaultStroke": {
           "type": "string",

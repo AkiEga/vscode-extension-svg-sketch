@@ -12,7 +12,10 @@ function getTemplateDirectoryUri(): vscode.Uri | undefined {
     return undefined;
   }
   const config = vscode.workspace.getConfiguration("svg-sketch");
-  const templateDir = config.get<string>("templateDir", ".svg-sketch/templates");
+  const templateDir = config.get<string>("templateDir", "");
+  if (!templateDir || templateDir.trim() === "") {
+    return undefined;
+  }
   return vscode.Uri.joinPath(root, templateDir);
 }
 
@@ -172,7 +175,10 @@ export async function saveTemplate(name: string, shapes: Shape[]): Promise<Diagr
     return undefined;
   }
 
-  await ensureTemplateDirectoryExists();
+  const dir = await ensureTemplateDirectoryExists();
+  if (!dir) {
+    return undefined;
+  }
   const template: DiagramTemplate = {
     id: createTemplateId(),
     name: trimmed,

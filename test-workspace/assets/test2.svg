@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="586" height="567" viewBox="0 0 586 567"
+  data-editor="svg-sketch"
+  data-diagram='{"version":1,"shapes":[{"id":"s1","stroke":"#000000","fill":"#ffffff","lineWidth":2,"type":"rect","x":40,"y":60,"width":100,"height":60,"label":"test","labelFontSize":16,"labelFontFamily":"sans-serif","labelFontColor":"#000000"}]}'>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect data-shape-id="s1" stroke="#000000" fill="#ffffff" stroke-width="2" x="40" y="60" width="100" height="60"/>
+  <text x="90" y="90" font-size="16" font-family="sans-serif" fill="#000000" text-anchor="middle" dominant-baseline="central">test</text>
+</svg>

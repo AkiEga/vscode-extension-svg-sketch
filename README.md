@@ -29,6 +29,15 @@ SVG Sketch is a VS Code extension that lets you create and edit SVG diagrams wit
 3. Draw on the canvas with the toolbar tools.
 4. Click `Save` to write the SVG content.
 
+### Create SVG File during Markdown editing
+
+1. Open the Command Palette.
+2. Run `SVG Sketch: Create SVG File`.
+3. Enter a file name (without extension).
+4. An SVG file is created in the configured output directory and opened in the editor.
+5. **When executed from a Markdown file, an image link is automatically inserted at the cursor position.**
+6. Draw the diagram, then click `Save`.
+
 ### Edit an existing SVG
 
 - Open a `.svg` file in VS Code.
@@ -59,7 +68,8 @@ SVG Sketch is a VS Code extension that lets you create and edit SVG diagrams wit
 
 | Setting | Description | Default |
 |---|---|---|
-| `svg-sketch.templateDir` | Directory for stored diagram templates (relative to workspace root) | `.svg-sketch/templates` |
+| `svg-sketch.svgOutputDir` | Directory to save SVG files when using the 'Create SVG File' command (relative to workspace root or current file directory) | `images` |
+| `svg-sketch.templateDir` | Directory for stored diagram templates (relative to workspace root). Leave empty to disable template features | `""` (disabled) |
 | `svg-sketch.defaultStroke` | Default stroke color for new shapes (hex) | `#000000` |
 | `svg-sketch.defaultFill` | Default fill color for new shapes (hex) | `#ffffff` |
 | `svg-sketch.defaultLineWidth` | Default line width for new shapes | `2` |
