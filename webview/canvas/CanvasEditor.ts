@@ -8,10 +8,12 @@ import { TextTool } from "./tools/TextTool";
 import { TableTool, type TableConfigRequest } from "./tools/TableTool";
 import { SelectTool, getShapeHandles } from "./tools/SelectTool";
 import type { DragHandleId } from "./tools/SelectTool";
-import { renderShapes } from "./render";
+import { renderShapes, getShapeCenter, getShapeBoundaryPoint } from "./render";
 import { prepareTemplateInsertion } from "./templateInsert";
 import { DEFAULT_DRAW_STYLE } from "./drawStyle";
 import { EditorStateMachine } from "./EditorStateMachine";
+import { EdgeEditPanel } from "../ui/EdgeEditPanel";
+import { FillStyleEditPanel } from "../ui/FillStyleEditPanel";
 
 /** Snap a value to the nearest grid line */
 function snapValue(value: number, gridSize: number): number {
@@ -100,6 +102,10 @@ export class CanvasEditor {
   // キーボードカーソル位置 (idle 時の移動 & objectInsertingMode の挿入起点)
   private cursorPos: Point = { x: 0, y: 0 };
   private cursorInitialized = false;
+  private connectSourceId: string | undefined;
+  private connectMousePos: Point | undefined;
+  private pendingConnectTrigger = false;
+  private pendingConnectTriggerAt = 0;
 
   // Help overlay
   private helpOverlayEl: HTMLElement | undefined;
@@ -194,6 +200,11 @@ export class CanvasEditor {
             if (style.fontSize !== undefined) { shape.labelFontSize = style.fontSize; }
             if (style.fontFamily !== undefined) { shape.labelFontFamily = style.fontFamily; }
             if (style.fontColor !== undefined) { shape.labelFontColor = style.fontColor; }
+            if (style.labelAlignH !== undefined) { shape.labelAlignH = style.labelAlignH; }
+            if (style.labelAlignV !== undefined) { shape.labelAlignV = style.labelAlignV; }
+          }
+          if (shape instanceof RectShape && style.cornerRadius !== undefined) {
+            shape.cornerRadius = Math.max(0, style.cornerRadius);
           }
         }
         this.onChange();
@@ -372,13 +383,12 @@ export class CanvasEditor {
     return this.shapes.map(s => s.clone());
   }
 
-  /** カーソル位置をキャンバス中央で初期化する */
+  /** カーソル位置をキャンバス左上で初期化する */
   private initCursorPos(): void {
     if (!this.cursorInitialized) {
-      const dpr = window.devicePixelRatio || 1;
       this.cursorPos = {
-        x: snapValue(this.canvas.width / dpr / 2, this._gridSize),
-        y: snapValue(this.canvas.height / dpr / 2, this._gridSize),
+        x: 20,
+        y: 20,
       };
       this.cursorInitialized = true;
     }
@@ -396,7 +406,10 @@ export class CanvasEditor {
       case "rect":
         shape = new RectShape({
           id: nextId(), x: pt.x, y: pt.y, width: defaultW, height: defaultH,
+          cornerRadius: this.style.cornerRadius,
           stroke: this.style.stroke, fill: this.style.fill, lineWidth: this.style.lineWidth,
+          labelAlignH: this.style.labelAlignH,
+          labelAlignV: this.style.labelAlignV,
         });
         break;
       case "ellipse":
@@ -404,6 +417,8 @@ export class CanvasEditor {
           id: nextId(), cx: pt.x + defaultW / 2, cy: pt.y + defaultH / 2,
           rx: defaultW / 2, ry: defaultH / 2,
           stroke: this.style.stroke, fill: this.style.fill, lineWidth: this.style.lineWidth,
+          labelAlignH: this.style.labelAlignH,
+          labelAlignV: this.style.labelAlignV,
         });
         break;
       case "arrow":
@@ -411,12 +426,16 @@ export class CanvasEditor {
           id: nextId(), x1: pt.x, y1: pt.y + defaultH / 2,
           x2: pt.x + defaultW, y2: pt.y + defaultH / 2,
           stroke: this.style.stroke, fill: this.style.fill, lineWidth: this.style.lineWidth,
+          labelAlignH: this.style.labelAlignH,
+          labelAlignV: this.style.labelAlignV,
         });
         break;
       case "bubble":
         shape = new BubbleShape({
           id: nextId(), x: pt.x, y: pt.y, width: defaultW, height: defaultH,
           stroke: this.style.stroke, fill: this.style.fill, lineWidth: this.style.lineWidth,
+          labelAlignH: this.style.labelAlignH,
+          labelAlignV: this.style.labelAlignV,
         });
         break;
       case "text":
@@ -443,9 +462,12 @@ export class CanvasEditor {
     this.pushUndo();
     this.shapes.push(shape);
     this.selectedIds = new Set([shape.id]);
+    this.selectTool.setSelectedIds(this.selectedIds); // Sync SelectTool state
     this.onSelectionChange(new Set(this.selectedIds));
     this.onChange();
     this.switchToSelect();
+    // 作成した図形を選択して objSelect モードへ遷移
+    this.stateMachine.enterObjSelect([shape.id]);
     this.render();
   }
 
@@ -512,6 +534,29 @@ export class CanvasEditor {
     });
 
     window.addEventListener("keydown", (e) => {
+      if (this.pendingConnectTrigger) {
+        const now = Date.now();
+        const valid = now - this.pendingConnectTriggerAt <= 1000;
+        if (valid && e.key === ">" && !e.ctrlKey && !e.altKey && !e.metaKey && this.selectedIds.size === 1) {
+          e.preventDefault();
+          this.pendingConnectTrigger = false;
+          this.pendingConnectTriggerAt = 0;
+          const sourceId = [...this.selectedIds][0];
+          this.connectSourceId = sourceId;
+          const source = this.shapes.find((s) => s.id === sourceId);
+          if (source) {
+            const b = source.getBounds();
+            this.connectMousePos = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+          }
+          this.render();
+          return;
+        }
+        if (e.key !== "Shift") {
+          this.pendingConnectTrigger = false;
+          this.pendingConnectTriggerAt = 0;
+        }
+      }
+
       // --- ハンドルヒントモード中 ---
       if (this.stateMachine.mode === "handleHintMode") {
         if (e.key === "Escape") {
@@ -541,8 +586,10 @@ export class CanvasEditor {
           const result = this.stateMachine.processHintInput(e.key);
           if (typeof result === "string") {
             this.selectedIds = new Set([result]);
+            this.selectTool.setSelectedIds(this.selectedIds); // Sync SelectTool state
             this.onSelectionChange(new Set(this.selectedIds));
-            this.stateMachine.exitToIdle();
+            // 図形選択後は objSelect モードへ遷移
+            this.stateMachine.enterObjSelect([result]);
           }
           this.render();
           return;
@@ -556,6 +603,12 @@ export class CanvasEditor {
           e.preventDefault();
           this.stateMachine.exitToIdle();
           this.render();
+          return;
+        }
+        // ショートカットキーで図形種別を直接選択
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey && this.stateMachine.selectInsertByShortcut(e.key)) {
+          e.preventDefault();
+          this.render(); // UI を更新
           return;
         }
         // 上下キーで図形種別を選択
@@ -573,7 +626,6 @@ export class CanvasEditor {
         if (e.key === "Enter") {
           e.preventDefault();
           this.insertShapeAtCursor(this.stateMachine.insertSelectedType);
-          this.stateMachine.exitToIdle();
           return;
         }
         // その他のキーは無視
@@ -581,6 +633,92 @@ export class CanvasEditor {
           e.preventDefault();
         }
         return;
+      }
+
+      // --- オブジェクト選択モード中 (ObjSelect) ---
+      if (this.stateMachine.mode === "objSelect") {
+        // Esc / Ctrl+G で idle へ戻る
+        if (e.key === "Escape" || (e.ctrlKey && e.key === "g")) {
+          e.preventDefault();
+          this.selectedIds.clear();
+          this.selectTool.setSelectedIds(this.selectedIds); // Sync SelectTool state
+          this.onSelectionChange(new Set(this.selectedIds));
+          this.stateMachine.exitToIdle();
+          this.render();
+          return;
+        }
+        // i キーで objectInsertingMode へ遷移（選択を解除して新規挿入）
+        if (e.key === "i" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          e.preventDefault();
+          this.selectedIds.clear();
+          this.selectTool.setSelectedIds(this.selectedIds);
+          this.onSelectionChange(new Set(this.selectedIds));
+          this.stateMachine.exitToIdle();
+          this.stateMachine.enterObjectInsertingMode();
+          this.render();
+          return;
+        }
+        // Enter キーで ObjEdit(select) モードへ遷移
+        if (e.key === "Enter" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          e.preventDefault();
+          const selected = this.getSelectedShape();
+          if (selected) {
+            this.stateMachine.enterObjEdit(selected.id, "select");
+            this.render();
+          }
+          return;
+        }
+        // objSelect モード中は他のキーを通常処理に流す（hjkl移動, Delete削除など）
+      }
+
+      // --- オブジェクト編集モード中 (ObjEdit) ---
+      if (this.stateMachine.mode === "objEdit") {
+        const subMode = this.stateMachine.objEditSubMode;
+        
+        // Esc / Ctrl+G で objSelect へ戻る（サブモードが select の場合のみ）
+        if ((e.key === "Escape" || (e.ctrlKey && e.key === "g")) && subMode === "select") {
+          e.preventDefault();
+          this.stateMachine.exitObjEditToObjSelect();
+          this.render();
+          return;
+        }
+
+        // select サブモード中のキーバインディング
+        if (subMode === "select") {
+          if (e.key === "i" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            e.preventDefault();
+            this.stateMachine.setObjEditSubMode("labelEdit");
+            // labelEdit への遷移時に、実際のラベル編集 UI を起動
+            const shape = this.shapes.find((s) => s.id === this.stateMachine.editingShapeId);
+            if (shape) {
+              this.editSelectedShapeLabel();
+            }
+            return;
+          }
+          if (e.key === "e" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            e.preventDefault();
+            this.stateMachine.setObjEditSubMode("edgeEdit");
+            const shape = this.shapes.find((s) => s.id === this.stateMachine.editingShapeId);
+            if (shape) {
+              this.showEdgeEditPanel(shape);
+            }
+            this.render();
+            return;
+          }
+          if (e.key === "p" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            e.preventDefault();
+            this.stateMachine.setObjEditSubMode("fillStyleEdit");
+            const shape = this.shapes.find((s) => s.id === this.stateMachine.editingShapeId);
+            if (shape) {
+              this.showFillStyleEditPanel(shape);
+            }
+            this.render();
+            return;
+          }
+        }
+
+        // labelEdit/edgeEdit/fillStyleEdit 中は特定のキーハンドリングを UI 側で処理
+        // ここでは Esc ハンドリングをスキップして、UI 側の cleanup に任せる
       }
 
       // テキスト入力中かどうかを一度取得し、以降のショートカットの分岐に利用
@@ -754,6 +892,14 @@ export class CanvasEditor {
 
       // ---- 以下: canvas ショートカット（テキスト入力中は実行しない） ----
 
+      // `->` で Connect モードを開始
+      if (e.key === "-" && !e.ctrlKey && !e.altKey && !e.metaKey && this.selectedIds.size === 1) {
+        e.preventDefault();
+        this.pendingConnectTrigger = true;
+        this.pendingConnectTriggerAt = Date.now();
+        return;
+      }
+
       // `f` キー: 図形選択済み→ハンドルヒント、未選択→図形ヒント
       if (e.key === "f" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat) {
         e.preventDefault();
@@ -778,12 +924,12 @@ export class CanvasEditor {
       // `i` キー: Select状態でラベル編集、未選択でオブジェクト挿入モード
       if (e.key === "i" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat) {
         e.preventDefault();
-        if (this.selectedIds.size === 1) {
-          // 図形選択時: ラベル編集
-          this.editSelectedShapeLabel();
-          return;
-        } else if (this.selectedIds.size === 0) {
-          // 未選択時: オブジェクト挿入モード
+        // idle モードでのみ objectInsertingMode に入る
+        if (this.stateMachine.mode === "idle") {
+          // 選択状態をクリアして objectInsertingMode に入る
+          this.selectedIds.clear();
+          this.selectTool.setSelectedIds(this.selectedIds);
+          this.onSelectionChange(new Set(this.selectedIds));
           this.stateMachine.enterObjectInsertingMode();
           this.render();
           return;
@@ -799,6 +945,12 @@ export class CanvasEditor {
 
       // `Escape` キー
       if (e.key === "Escape") {
+        if (this.connectSourceId) {
+          this.connectSourceId = undefined;
+          this.connectMousePos = undefined;
+          this.render();
+          return;
+        }
         if (this.helpOverlayEl) { this.hideHelpOverlay(); return; }
         if (this.activeHandleForKbd) {
           this.activeHandleForKbd = undefined;
@@ -845,14 +997,15 @@ export class CanvasEditor {
         : this.selectedIds.size > 0;
       if ((isArrow || isVimMove || isEmacsMove) && hasMoveTarget) {
         e.preventDefault();
+        const keyboardMoveStep = 10;
         let dx = 0;
         let dy = 0;
-        if (e.key === "ArrowLeft"  || e.key === "h") { dx = -20; }
-        if (e.key === "ArrowRight" || e.key === "l") { dx =  20; }
-        if (e.key === "ArrowUp"    || e.key === "k") { dy = -20; }
-        if (e.key === "ArrowDown"  || e.key === "j") { dy =  20; }
-        if (e.key === "n") { dy =  20; }  // Ctrl+n
-        if (e.key === "p") { dy = -20; }  // Ctrl+p
+        if (e.key === "ArrowLeft"  || e.key === "h") { dx = -keyboardMoveStep; }
+        if (e.key === "ArrowRight" || e.key === "l") { dx =  keyboardMoveStep; }
+        if (e.key === "ArrowUp"    || e.key === "k") { dy = -keyboardMoveStep; }
+        if (e.key === "ArrowDown"  || e.key === "j") { dy =  keyboardMoveStep; }
+        if (e.key === "n") { dy =  keyboardMoveStep; }  // Ctrl+n
+        if (e.key === "p") { dy = -keyboardMoveStep; }  // Ctrl+p
         // キー長押し時の auto-repeat では pushUndo しない（1操作 = 1アンドゥ）
         if (!e.repeat) { this.pushUndo(); }
         if (this.activeHandleForKbd && this.selectedIds.size === 1) {
@@ -863,9 +1016,8 @@ export class CanvasEditor {
         } else {
           for (const shape of this.shapes.filter((s) => this.selectedIds.has(s.id))) {
             if (shape instanceof ArrowShape) {
-              // Arrow図形は10px単位で移動
-              shape.x1 += dx / 2; shape.y1 += dy / 2;
-              shape.x2 += dx / 2; shape.y2 += dy / 2;
+              shape.x1 += dx; shape.y1 += dy;
+              shape.x2 += dx; shape.y2 += dy;
             } else if (shape instanceof EllipseShape) {
               shape.cx += dx; shape.cy += dy;
             } else if (shape instanceof RectShape || shape instanceof BubbleShape || shape instanceof TextShape || shape instanceof TableShape || shape instanceof ImageShape) {
@@ -944,12 +1096,66 @@ export class CanvasEditor {
 
   private onMouseDown(e: MouseEvent): void {
     if (e.button !== 0) { return; } // Only handle left button
+    if (this.connectSourceId) {
+      e.preventDefault(); // Prevent any default behavior
+      const source = this.shapes.find((s) => s.id === this.connectSourceId);
+      if (!source) {
+        this.connectSourceId = undefined;
+        this.connectMousePos = undefined;
+        this.render();
+        return;
+      }
+      const pt = this.getPoint(e);
+      const target = this.findShapeAtPoint(pt);
+      if (target && target.id !== source.id) {
+        const sourceCenter = getShapeCenter(source);
+        const targetCenter = getShapeCenter(target);
+        const start = getShapeBoundaryPoint(source, sourceCenter, targetCenter);
+        const end = getShapeBoundaryPoint(target, targetCenter, sourceCenter);
+        const arrow = new ArrowShape({
+          id: nextId(),
+          x1: start.x,
+          y1: start.y,
+          x2: end.x,
+          y2: end.y,
+          stroke: this.style.stroke,
+          fill: this.style.fill,
+          lineWidth: this.style.lineWidth,
+          labelAlignH: this.style.labelAlignH,
+          labelAlignV: this.style.labelAlignV,
+        });
+        this.pushUndo();
+        this.shapes.push(arrow);
+        this.selectedIds = new Set([arrow.id]);
+        this.selectTool.setSelectedIds(this.selectedIds); // Sync SelectTool state
+        this.onSelectionChange(new Set(this.selectedIds));
+        this.onChange();
+      }
+      this.connectSourceId = undefined;
+      this.connectMousePos = undefined;
+      this.isDragging = false; // Ensure clean state
+      this.render();
+      return;
+    }
+    // objectInsertingMode 中のドラッグ: 選択した図形種別でツールを確定して描画開始
+    // (currentTool が selectTool のままだと rubber-band 選択が誤発火するため)
+    if (this.stateMachine.mode === "objectInsertingMode") {
+      const toolType = this.stateMachine.insertSelectedType;
+      this.setTool(toolType);
+      this.onToolChange(toolType);
+      this.stateMachine.exitToIdle();
+    }
     this.isDragging = true;
     this.currentTool.onMouseDown(this.getToolPoint(e), this.style, { shiftKey: e.shiftKey });
     this.render();
   }
 
   private onMouseMove(e: MouseEvent): void {
+    if (this.connectSourceId) {
+      this.connectMousePos = this.getPoint(e);
+      this.render();
+      return;
+    }
     // Update cursor based on handle hover (even when not dragging)
     if (this.currentToolType === "select" && !this.isDragging) {
       const cursor = this.selectTool.getCursorAt(this.getPoint(e));
@@ -976,9 +1182,12 @@ export class CanvasEditor {
       this.shapes.push(shape);
       // 作成した図形を自動選択
       this.selectedIds = new Set([shape.id]);
+      this.selectTool.setSelectedIds(this.selectedIds); // Sync SelectTool state
       this.onSelectionChange(new Set(this.selectedIds));
       this.onChange();
       this.switchToSelect();
+      // 作成した図形を選択して objSelect モードへ遷移
+      this.stateMachine.enterObjSelect([shape.id]);
     } else if (wasDraggingSelect && this.selectedIds.size > 0) {
       if (this._snapToGrid) {
         this.snapSelectedShapesToGrid();
@@ -987,6 +1196,16 @@ export class CanvasEditor {
       this.onChange();
     }
     this.render();
+  }
+
+  private findShapeAtPoint(pt: Point): Shape | undefined {
+    for (let i = this.shapes.length - 1; i >= 0; i--) {
+      const shape = this.shapes[i];
+      if (hitTest(shape, pt, 6)) {
+        return shape;
+      }
+    }
+    return undefined;
   }
 
   resize(): void {
@@ -1014,6 +1233,9 @@ export class CanvasEditor {
     if (this.stateMachine.mode === "handleHintMode") { this.drawHandleHints(); }
     if (this.activeHandleForKbd && this.selectedIds.size === 1) { this.drawActiveHandleIndicator(); }
     if (this.stateMachine.mode === "objectInsertingMode") { this.drawInsertIndicator(); }
+    if (this.stateMachine.mode === "objSelect") { this.drawObjSelectIndicator(); }
+    if (this.stateMachine.mode === "objEdit") { this.drawObjEditIndicator(); }
+    if (this.connectSourceId) { this.drawConnectIndicator(); }
   }
 
   exitObjectInsertingMode(): void {
@@ -1134,7 +1356,8 @@ export class CanvasEditor {
       ["j / ↓",      "下へ移動 (未選択時はカーソル移動)"],
       ["k / ↑",      "上へ移動 (未選択時はカーソル移動)"],
       ["l / →",      "右へ移動 (未選択時はカーソル移動)"],
-      ["i",          "図形挿入モード (↑↓で選択 → Enter で確定)"],
+      ["i",          "図形挿入モード (R/E/A/T/G or ↑↓で選択 → Enter で確定)"],
+      ["->",         "図形接続モード (選択中に入力、次クリックで矢印作成)"],
       ["s",          "描画スタイル切替 (Plain→Sketch→Pencil)"],
       ["Escape / Ctrl+G", "ハンドル解除 → 選択解除"],
       ["Del / BS",   "図形を削除"],
@@ -1289,8 +1512,8 @@ export class CanvasEditor {
     const types = this.stateMachine.insertShapeTypes;
     const selIdx = this.stateMachine.insertSelectedIndex;
     const LABEL_MAP: Record<string, string> = {
-      rect: "■ Rect", ellipse: "● Ellipse", arrow: "→ Arrow",
-      bubble: "💬 Bubble", text: "T Text", table: "⊞ Table",
+      rect: "■ Rect (R)", ellipse: "● Ellipse (E)", arrow: "→ Arrow (A)",
+      text: "T Text (T)", table: "⊞ Table (G)",
     };
 
     const fontSize = 14;
@@ -1333,11 +1556,141 @@ export class CanvasEditor {
     }
 
     // 下部ヒント
-    const hint = "↑↓: select / Enter: insert / Esc: cancel";
+    const hint = "R/E/A/T/G: select / ↑↓: move / Enter: insert / Esc: cancel";
     ctx.font = `11px monospace`;
     ctx.fillStyle = "rgba(255,255,255,0.5)";
     const hintW = ctx.measureText(hint).width;
     ctx.fillText(hint, logicalW / 2 - hintW / 2, boxY + totalH + 16);
+
+    ctx.restore();
+  }
+
+  private drawConnectIndicator(): void {
+    if (!this.connectSourceId || !this.connectMousePos) { return; }
+    const source = this.shapes.find((s) => s.id === this.connectSourceId);
+    if (!source) { return; }
+
+    const b = source.getBounds();
+    const start = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+    const end = this.connectMousePos;
+    const ctx = this.ctx;
+    const dpr = window.devicePixelRatio || 1;
+
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.strokeStyle = "#ff8a00";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const msg = "Connect mode: click target shape (Esc to cancel)";
+    ctx.font = "12px monospace";
+    const textW = ctx.measureText(msg).width;
+    const boxW = textW + 12;
+    const boxH = 22;
+    const boxX = 12;
+    const boxY = 12;
+    ctx.fillStyle = "rgba(0,0,0,0.72)";
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, 4);
+      ctx.fill();
+    } else {
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+    }
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(msg, boxX + 6, boxY + 15);
+    ctx.restore();
+  }
+
+  /** objSelect モードの状態表示（画面下部にステータスバー風） */
+  private drawObjSelectIndicator(): void {
+    const ctx = this.ctx;
+    const dpr = window.devicePixelRatio || 1;
+    const logicalW = this.canvas.width / dpr;
+    const logicalH = this.canvas.height / dpr;
+
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const count = this.selectedIds.size;
+    const msg = `ObjSelect: ${count} shape${count !== 1 ? "s" : ""} selected | i: insert | Enter: edit | ->: connect | Esc: idle`;
+    ctx.font = "12px monospace";
+    const textW = ctx.measureText(msg).width;
+    const boxW = textW + 16;
+    const boxH = 24;
+    const boxX = logicalW / 2 - boxW / 2;
+    const boxY = logicalH - boxH - 12;
+
+    // 背景
+    ctx.fillStyle = "rgba(74, 144, 217, 0.85)";
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, 4);
+      ctx.fill();
+    } else {
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+    }
+
+    // テキスト
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(msg, boxX + 8, boxY + 16);
+
+    ctx.restore();
+  }
+
+  /** objEdit モードの状態表示（画面下部にステータスバー風） */
+  private drawObjEditIndicator(): void {
+    const ctx = this.ctx;
+    const dpr = window.devicePixelRatio || 1;
+    const logicalW = this.canvas.width / dpr;
+    const logicalH = this.canvas.height / dpr;
+
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const subMode = this.stateMachine.objEditSubMode;
+    let msg = "";
+    
+    switch (subMode) {
+      case "select":
+        msg = "ObjEdit(select): i: label | e: edge | p: fill | Esc: back to ObjSelect";
+        break;
+      case "labelEdit":
+        msg = "ObjEdit(labelEdit): editing label... | Ctrl+Enter: save | Esc: cancel";
+        break;
+      case "edgeEdit":
+        msg = "ObjEdit(edgeEdit): [TODO Phase 3] | Esc: back to select";
+        break;
+      case "fillStyleEdit":
+        msg = "ObjEdit(fillStyleEdit): [TODO Phase 4] | Esc: back to select";
+        break;
+    }
+
+    ctx.font = "12px monospace";
+    const textW = ctx.measureText(msg).width;
+    const boxW = textW + 16;
+    const boxH = 24;
+    const boxX = logicalW / 2 - boxW / 2;
+    const boxY = logicalH - boxH - 12;
+
+    // 背景（緑系で ObjSelect と区別）
+    ctx.fillStyle = "rgba(56, 182, 92, 0.85)";
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, 4);
+      ctx.fill();
+    } else {
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+    }
+
+    // テキスト
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(msg, boxX + 8, boxY + 16);
 
     ctx.restore();
   }
@@ -1495,6 +1848,11 @@ export class CanvasEditor {
       if (textarea.parentElement) {
         textarea.parentElement.removeChild(textarea);
       }
+      // objEdit(labelEdit) モードからの終了時は objEdit(select) へ戻る
+      if (this.stateMachine.mode === "objEdit" && this.stateMachine.objEditSubMode === "labelEdit") {
+        this.stateMachine.setObjEditSubMode("select");
+        this.render();
+      }
     };
 
     const onKey = (e: KeyboardEvent) => {
@@ -1516,6 +1874,121 @@ export class CanvasEditor {
     textarea.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onOutsideMouseDown, true);
     this.activePopupCleanup = cleanup;
+  }
+
+  /** edgeEdit パネルを表示して stroke と lineWidth を編集 */
+  private showEdgeEditPanel(shape: Shape): void {
+    const container = this.canvas.parentElement!;
+    
+    // 編集可能なプロパティを持つ図形のみ対象
+    if (!("stroke" in shape) || !("lineWidth" in shape)) {
+      return;
+    }
+
+    const originalStroke = shape.stroke;
+    const originalLineWidth = shape.lineWidth;
+
+    // EdgeEditPanel を作成
+    const panel = new EdgeEditPanel({
+      stroke: originalStroke,
+      lineWidth: originalLineWidth,
+      container,
+      onChange: (stroke, lineWidth) => {
+        // プレビュー: 即座に図形プロパティを更新
+        (shape as any).stroke = stroke;
+        (shape as any).lineWidth = lineWidth;
+        this.render();
+      },
+      onCommit: (stroke, lineWidth) => {
+        // 確定: 変更があれば undo スタックに追加
+        if (stroke !== originalStroke || lineWidth !== originalLineWidth) {
+          this.pushUndo();
+          (shape as any).stroke = stroke;
+          (shape as any).lineWidth = lineWidth;
+          this.onChange();
+        }
+        // objEdit(select) に戻る
+        this.stateMachine.setObjEditSubMode("select");
+        this.render();
+      },
+      onCancel: () => {
+        // キャンセル: objEdit(select) に戻る
+        this.stateMachine.setObjEditSubMode("select");
+        this.render();
+      },
+    });
+
+    // cleanup 登録
+    this.activePopupCleanup = () => {
+      // パネルは内部で destroy されるため、特に追加処理は不要
+    };
+  }
+
+  /** fillStyleEdit パネルを表示して fill, opacity, cornerRadius を編集 */
+  private showFillStyleEditPanel(shape: Shape): void {
+    const container = this.canvas.parentElement!;
+    
+    // 編集可能なプロパティを持つ図形のみ対象
+    if (!("fill" in shape)) {
+      return;
+    }
+
+    const originalFill = shape.fill;
+    const originalOpacity = (shape as any).opacity as number | undefined;
+    const originalCornerRadius = shape instanceof RectShape ? shape.cornerRadius : undefined;
+    const isRect = shape instanceof RectShape;
+
+    // FillStyleEditPanel を作成
+    const panel = new FillStyleEditPanel({
+      fill: originalFill,
+      opacity: originalOpacity,
+      cornerRadius: originalCornerRadius,
+      isRect,
+      container,
+      onChange: (fill, opacity, cornerRadius) => {
+        // プレビュー: 即座に図形プロパティを更新
+        (shape as any).fill = fill;
+        if (opacity !== undefined) {
+          (shape as any).opacity = opacity;
+        }
+        if (isRect && cornerRadius !== undefined) {
+          (shape as RectShape).cornerRadius = cornerRadius;
+        }
+        this.render();
+      },
+      onCommit: (fill, opacity, cornerRadius) => {
+        // 確定: 変更があれば undo スタックに追加
+        let changed = false;
+        if (fill !== originalFill) { changed = true; }
+        if (opacity !== originalOpacity) { changed = true; }
+        if (isRect && cornerRadius !== originalCornerRadius) { changed = true; }
+        
+        if (changed) {
+          this.pushUndo();
+          (shape as any).fill = fill;
+          if (opacity !== undefined) {
+            (shape as any).opacity = opacity;
+          }
+          if (isRect && cornerRadius !== undefined) {
+            (shape as RectShape).cornerRadius = cornerRadius;
+          }
+          this.onChange();
+        }
+        // objEdit(select) に戻る
+        this.stateMachine.setObjEditSubMode("select");
+        this.render();
+      },
+      onCancel: () => {
+        // キャンセル: objEdit(select) に戻る
+        this.stateMachine.setObjEditSubMode("select");
+        this.render();
+      },
+    });
+
+    // cleanup 登録
+    this.activePopupCleanup = () => {
+      // パネルは内部で destroy されるため、特に追加処理は不要
+    };
   }
 
   private showTableConfig(req: TableConfigRequest): void {

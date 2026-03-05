@@ -265,16 +265,27 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape, style: "plain" |
   switch (shape.type) {
     case "rect": {
       const s = shape as RectShape;
-      if (s.fill !== "none" && s.fill !== "transparent") {
-        ctx.fillRect(s.x, s.y, s.width, s.height);
-      }
-      if (drawStroke) {
-        if (style === "pencil") {
-          drawPencilRect(ctx, s.x, s.y, s.width, s.height, makeRand(seedOf(s)));
-        } else if (style === "sketch") {
-          drawSketchyRect(ctx, s.x, s.y, s.width, s.height, makeRand(seedOf(s)));
-        } else {
-          ctx.strokeRect(s.x, s.y, s.width, s.height);
+      const radius = Math.max(0, Math.min(s.cornerRadius ?? 0, Math.min(s.width, s.height) / 2));
+      if (radius > 0) {
+        drawRoundedRectPath(ctx, s.x, s.y, s.width, s.height, radius);
+        if (s.fill !== "none" && s.fill !== "transparent") {
+          ctx.fill();
+        }
+        if (drawStroke) {
+          ctx.stroke();
+        }
+      } else {
+        if (s.fill !== "none" && s.fill !== "transparent") {
+          ctx.fillRect(s.x, s.y, s.width, s.height);
+        }
+        if (drawStroke) {
+          if (style === "pencil") {
+            drawPencilRect(ctx, s.x, s.y, s.width, s.height, makeRand(seedOf(s)));
+          } else if (style === "sketch") {
+            drawSketchyRect(ctx, s.x, s.y, s.width, s.height, makeRand(seedOf(s)));
+          } else {
+            ctx.strokeRect(s.x, s.y, s.width, s.height);
+          }
         }
       }
       drawShapeLabel(ctx, s, s.x + s.width / 2, s.y + s.height / 2);
@@ -437,16 +448,41 @@ function drawBubbleStraight(ctx: CanvasRenderingContext2D, shape: BubbleShape): 
 
 function drawShapeLabel(
   ctx: CanvasRenderingContext2D,
-  shape: Shape & { label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; stroke: string },
-  x: number,
-  y: number,
+  shape: Shape & {
+    label?: string;
+    labelFontSize?: number;
+    labelFontFamily?: string;
+    labelFontColor?: string;
+    labelAlignH?: "left" | "center" | "right";
+    labelAlignV?: "top" | "middle" | "bottom";
+    stroke: string;
+  },
+  defaultX: number,
+  defaultY: number,
 ): void {
   if (!shape.label) { return; }
   ctx.save();
   const fontSize = shape.labelFontSize ?? shapeDefaults.fontSize;
+  const hAlign = shape.labelAlignH ?? "center";
+  const vAlign = shape.labelAlignV ?? "middle";
+  const bounds = shape.getBounds();
+  const pad = 8;
+  let x = defaultX;
+  let y = defaultY;
+  if (hAlign === "left") {
+    x = bounds.minX + pad;
+  } else if (hAlign === "right") {
+    x = bounds.maxX - pad;
+  }
+  if (vAlign === "top") {
+    y = bounds.minY + pad + fontSize / 2;
+  } else if (vAlign === "bottom") {
+    y = bounds.maxY - pad - fontSize / 2;
+  }
+
   ctx.font = `${fontSize}px ${shape.labelFontFamily ?? shapeDefaults.fontFamily}`;
   ctx.fillStyle = shape.labelFontColor ?? shape.stroke;
-  ctx.textAlign = "center";
+  ctx.textAlign = hAlign === "left" ? "left" : hAlign === "right" ? "right" : "center";
   ctx.textBaseline = "middle";
   const lines = shape.label.split("\n");
   const lineHeight = fontSize * 1.4;
@@ -455,6 +491,32 @@ function drawShapeLabel(
     ctx.fillText(lines[i], x, startY + i * lineHeight);
   }
   ctx.restore();
+}
+
+function drawRoundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  ctx.beginPath();
+  if (ctx.roundRect) {
+    ctx.roundRect(x, y, width, height, radius);
+    return;
+  }
+  const r = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 function drawArrow(
@@ -621,4 +683,176 @@ function drawRubberBand(ctx: CanvasRenderingContext2D, rb: RubberBand): void {
   ctx.setLineDash([4, 3]);
   ctx.strokeRect(rb.x, rb.y, rb.width, rb.height);
   ctx.restore();
+}
+
+// ── Shape boundary helpers ───────────────────────────────────────
+
+/**
+ * Get the center point of a shape.
+ */
+export function getShapeCenter(shape: Shape): Point {
+  const bounds = shape.getBounds();
+  return {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+  };
+}
+
+/**
+ * Calculate the intersection point where a line segment (from → to)
+ * crosses the boundary of the given shape.
+ * Returns the intersection closest to 'from'.
+ */
+export function getShapeBoundaryPoint(shape: Shape, from: Point, to: Point): Point {
+  if (shape instanceof EllipseShape) {
+    return getEllipseBoundaryPoint(shape, from, to);
+  }
+  // For all other shapes (Rect, Bubble, Table, Text, Image), treat as rectangle
+  return getRectBoundaryPoint(shape, from, to);
+}
+
+/**
+ * Calculate intersection of line segment (from → to) with the boundary
+ * of a rectangle shape.
+ */
+function getRectBoundaryPoint(shape: Shape, from: Point, to: Point): Point {
+  const bounds = shape.getBounds();
+  const { minX, maxX, minY, maxY } = bounds;
+
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) {
+    // Degenerate case: from and to are the same point
+    return from;
+  }
+
+  // Test intersection with all four edges
+  const intersections: Point[] = [];
+
+  // Top edge (y = minY)
+  if (dy !== 0) {
+    const t = (minY - from.y) / dy;
+    if (t >= 0 && t <= 1) {
+      const x = from.x + t * dx;
+      if (x >= minX && x <= maxX) {
+        intersections.push({ x, y: minY });
+      }
+    }
+  }
+
+  // Bottom edge (y = maxY)
+  if (dy !== 0) {
+    const t = (maxY - from.y) / dy;
+    if (t >= 0 && t <= 1) {
+      const x = from.x + t * dx;
+      if (x >= minX && x <= maxX) {
+        intersections.push({ x, y: maxY });
+      }
+    }
+  }
+
+  // Left edge (x = minX)
+  if (dx !== 0) {
+    const t = (minX - from.x) / dx;
+    if (t >= 0 && t <= 1) {
+      const y = from.y + t * dy;
+      if (y >= minY && y <= maxY) {
+        intersections.push({ x: minX, y });
+      }
+    }
+  }
+
+  // Right edge (x = maxX)
+  if (dx !== 0) {
+    const t = (maxX - from.x) / dx;
+    if (t >= 0 && t <= 1) {
+      const y = from.y + t * dy;
+      if (y >= minY && y <= maxY) {
+        intersections.push({ x: maxX, y });
+      }
+    }
+  }
+
+  // Return the intersection closest to 'from'
+  if (intersections.length === 0) {
+    // Fallback to shape center if no intersection found
+    const center = getShapeCenter(shape);
+    return center;
+  }
+
+  let closest = intersections[0];
+  let minDist = Math.hypot(closest.x - from.x, closest.y - from.y);
+  for (let i = 1; i < intersections.length; i++) {
+    const dist = Math.hypot(intersections[i].x - from.x, intersections[i].y - from.y);
+    if (dist < minDist) {
+      minDist = dist;
+      closest = intersections[i];
+    }
+  }
+  return closest;
+}
+
+/**
+ * Calculate intersection of line segment (from → to) with the boundary
+ * of an ellipse shape.
+ */
+function getEllipseBoundaryPoint(shape: EllipseShape, from: Point, to: Point): Point {
+  const { cx, cy, rx, ry } = shape;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+
+  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) {
+    return from;
+  }
+
+  // Normalize the line to unit circle space
+  // Ellipse equation: ((x-cx)/rx)^2 + ((y-cy)/ry)^2 = 1
+  // Line parametric: x = from.x + t*dx, y = from.y + t*dy
+  // Substitute and solve quadratic for t
+
+  const fx = (from.x - cx) / rx;
+  const fy = (from.y - cy) / ry;
+  const ddx = dx / rx;
+  const ddy = dy / ry;
+
+  const a = ddx * ddx + ddy * ddy;
+  const b = 2 * (fx * ddx + fy * ddy);
+  const c = fx * fx + fy * fy - 1;
+
+  const discriminant = b * b - 4 * a * c;
+  if (discriminant < 0) {
+    // No intersection, return center
+    return { x: cx, y: cy };
+  }
+
+  const sqrt_d = Math.sqrt(discriminant);
+  const t1 = (-b - sqrt_d) / (2 * a);
+  const t2 = (-b + sqrt_d) / (2 * a);
+
+  // Find the intersection closest to 'from' that lies on the segment [0, 1]
+  const candidates: Point[] = [];
+  for (const t of [t1, t2]) {
+    if (t >= 0 && t <= 1) {
+      candidates.push({
+        x: from.x + t * dx,
+        y: from.y + t * dy,
+      });
+    }
+  }
+
+  if (candidates.length === 0) {
+    // Fallback to center
+    return { x: cx, y: cy };
+  }
+
+  let closest = candidates[0];
+  let minDist = Math.hypot(closest.x - from.x, closest.y - from.y);
+  for (let i = 1; i < candidates.length; i++) {
+    const dist = Math.hypot(candidates[i].x - from.x, candidates[i].y - from.y);
+    if (dist < minDist) {
+      minDist = dist;
+      closest = candidates[i];
+    }
+  }
+  return closest;
 }

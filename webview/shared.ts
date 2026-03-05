@@ -69,9 +69,12 @@ export interface DrawStyle {
   stroke: string;
   fill: string;
   lineWidth: number;
+  cornerRadius: number;
   fontSize: number;
   fontFamily: string;
   fontColor: string;
+  labelAlignH: "left" | "center" | "right";
+  labelAlignV: "top" | "middle" | "bottom";
 }
 
 /** Modifier key state passed from mouse events */

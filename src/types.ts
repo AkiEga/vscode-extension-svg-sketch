@@ -1,5 +1,7 @@
 /** Supported shape types */
 export type ShapeType = "rect" | "ellipse" | "arrow" | "bubble" | "text" | "table" | "image";
+export type LabelHorizontalAlign = "left" | "center" | "right";
+export type LabelVerticalAlign = "top" | "middle" | "bottom";
 
 /** A 2D point */
 export interface Point {
@@ -54,25 +56,31 @@ export class RectShape extends Shape {
   y: number;
   width: number;
   height: number;
+  cornerRadius?: number;
   label?: string;
   labelFontSize?: number;
   labelFontFamily?: string;
   labelFontColor?: string;
+  labelAlignH?: LabelHorizontalAlign;
+  labelAlignV?: LabelVerticalAlign;
 
-  constructor(data: { id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }) {
+  constructor(data: { id: string; x: number; y: number; width: number; height: number; cornerRadius?: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }) {
     super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
     this.x = data.x;
     this.y = data.y;
     this.width = data.width;
     this.height = data.height;
+    this.cornerRadius = data.cornerRadius;
     this.label = data.label;
     this.labelFontSize = data.labelFontSize;
     this.labelFontFamily = data.labelFontFamily;
     this.labelFontColor = data.labelFontColor;
+    this.labelAlignH = data.labelAlignH;
+    this.labelAlignV = data.labelAlignV;
   }
 
   clone(newId?: string): RectShape {
-    return new RectShape({ id: newId ?? this.id, x: this.x, y: this.y, width: this.width, height: this.height, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
+    return new RectShape({ id: newId ?? this.id, x: this.x, y: this.y, width: this.width, height: this.height, cornerRadius: this.cornerRadius, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, labelAlignH: this.labelAlignH, labelAlignV: this.labelAlignV, groupId: this.groupId });
   }
 
   hitTest(pt: Point, tolerance = 6): boolean {
@@ -91,7 +99,7 @@ export class RectShape extends Shape {
   getOrigin(): Point { return { x: this.x, y: this.y }; }
 
   translate(dx: number, dy: number): RectShape {
-    return new RectShape({ id: this.id, x: this.x + dx, y: this.y + dy, width: this.width, height: this.height, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
+    return new RectShape({ id: this.id, x: this.x + dx, y: this.y + dy, width: this.width, height: this.height, cornerRadius: this.cornerRadius, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, labelAlignH: this.labelAlignH, labelAlignV: this.labelAlignV, groupId: this.groupId });
   }
 }
 
@@ -105,8 +113,10 @@ export class EllipseShape extends Shape {
   labelFontSize?: number;
   labelFontFamily?: string;
   labelFontColor?: string;
+  labelAlignH?: LabelHorizontalAlign;
+  labelAlignV?: LabelVerticalAlign;
 
-  constructor(data: { id: string; cx: number; cy: number; rx: number; ry: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }) {
+  constructor(data: { id: string; cx: number; cy: number; rx: number; ry: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }) {
     super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
     this.cx = data.cx;
     this.cy = data.cy;
@@ -116,10 +126,12 @@ export class EllipseShape extends Shape {
     this.labelFontSize = data.labelFontSize;
     this.labelFontFamily = data.labelFontFamily;
     this.labelFontColor = data.labelFontColor;
+    this.labelAlignH = data.labelAlignH;
+    this.labelAlignV = data.labelAlignV;
   }
 
   clone(newId?: string): EllipseShape {
-    return new EllipseShape({ id: newId ?? this.id, cx: this.cx, cy: this.cy, rx: this.rx, ry: this.ry, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
+    return new EllipseShape({ id: newId ?? this.id, cx: this.cx, cy: this.cy, rx: this.rx, ry: this.ry, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, labelAlignH: this.labelAlignH, labelAlignV: this.labelAlignV, groupId: this.groupId });
   }
 
   hitTest(pt: Point, tolerance = 6): boolean {
@@ -135,7 +147,7 @@ export class EllipseShape extends Shape {
   getOrigin(): Point { return { x: this.cx, y: this.cy }; }
 
   translate(dx: number, dy: number): EllipseShape {
-    return new EllipseShape({ id: this.id, cx: this.cx + dx, cy: this.cy + dy, rx: this.rx, ry: this.ry, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
+    return new EllipseShape({ id: this.id, cx: this.cx + dx, cy: this.cy + dy, rx: this.rx, ry: this.ry, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, labelAlignH: this.labelAlignH, labelAlignV: this.labelAlignV, groupId: this.groupId });
   }
 }
 
@@ -149,8 +161,10 @@ export class ArrowShape extends Shape {
   labelFontSize?: number;
   labelFontFamily?: string;
   labelFontColor?: string;
+  labelAlignH?: LabelHorizontalAlign;
+  labelAlignV?: LabelVerticalAlign;
 
-  constructor(data: { id: string; x1: number; y1: number; x2: number; y2: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }) {
+  constructor(data: { id: string; x1: number; y1: number; x2: number; y2: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }) {
     super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
     this.x1 = data.x1;
     this.y1 = data.y1;
@@ -160,10 +174,12 @@ export class ArrowShape extends Shape {
     this.labelFontSize = data.labelFontSize;
     this.labelFontFamily = data.labelFontFamily;
     this.labelFontColor = data.labelFontColor;
+    this.labelAlignH = data.labelAlignH;
+    this.labelAlignV = data.labelAlignV;
   }
 
   clone(newId?: string): ArrowShape {
-    return new ArrowShape({ id: newId ?? this.id, x1: this.x1, y1: this.y1, x2: this.x2, y2: this.y2, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
+    return new ArrowShape({ id: newId ?? this.id, x1: this.x1, y1: this.y1, x2: this.x2, y2: this.y2, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, labelAlignH: this.labelAlignH, labelAlignV: this.labelAlignV, groupId: this.groupId });
   }
 
   hitTest(pt: Point, tolerance = 6): boolean {
@@ -183,7 +199,7 @@ export class ArrowShape extends Shape {
   getOrigin(): Point { return { x: this.x1, y: this.y1 }; }
 
   translate(dx: number, dy: number): ArrowShape {
-    return new ArrowShape({ id: this.id, x1: this.x1 + dx, y1: this.y1 + dy, x2: this.x2 + dx, y2: this.y2 + dy, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, groupId: this.groupId });
+    return new ArrowShape({ id: this.id, x1: this.x1 + dx, y1: this.y1 + dy, x2: this.x2 + dx, y2: this.y2 + dy, stroke: this.stroke, fill: this.fill, lineWidth: this.lineWidth, label: this.label, labelFontSize: this.labelFontSize, labelFontFamily: this.labelFontFamily, labelFontColor: this.labelFontColor, labelAlignH: this.labelAlignH, labelAlignV: this.labelAlignV, groupId: this.groupId });
   }
 }
 
@@ -197,8 +213,10 @@ export class BubbleShape extends Shape {
   labelFontSize?: number;
   labelFontFamily?: string;
   labelFontColor?: string;
+  labelAlignH?: LabelHorizontalAlign;
+  labelAlignV?: LabelVerticalAlign;
 
-  constructor(data: { id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }) {
+  constructor(data: { id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }) {
     super(data.id, data.stroke, data.fill, data.lineWidth, data.groupId);
     this.x = data.x;
     this.y = data.y;
@@ -208,6 +226,8 @@ export class BubbleShape extends Shape {
     this.labelFontSize = data.labelFontSize;
     this.labelFontFamily = data.labelFontFamily;
     this.labelFontColor = data.labelFontColor;
+    this.labelAlignH = data.labelAlignH;
+    this.labelAlignV = data.labelAlignV;
   }
 
   clone(newId?: string): BubbleShape {
@@ -224,6 +244,8 @@ export class BubbleShape extends Shape {
       labelFontSize: this.labelFontSize,
       labelFontFamily: this.labelFontFamily,
       labelFontColor: this.labelFontColor,
+      labelAlignH: this.labelAlignH,
+      labelAlignV: this.labelAlignV,
       groupId: this.groupId,
     });
   }
@@ -257,6 +279,8 @@ export class BubbleShape extends Shape {
       labelFontSize: this.labelFontSize,
       labelFontFamily: this.labelFontFamily,
       labelFontColor: this.labelFontColor,
+      labelAlignH: this.labelAlignH,
+      labelAlignV: this.labelAlignV,
       groupId: this.groupId,
     });
   }
@@ -452,10 +476,10 @@ export type ConcreteShape = RectShape | EllipseShape | ArrowShape | BubbleShape 
 
 /** Plain-object shape representation (for JSON deserialization) */
 export type ShapeJSON =
-  | { type: "rect"; id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }
-  | { type: "ellipse"; id: string; cx: number; cy: number; rx: number; ry: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }
-  | { type: "arrow"; id: string; x1: number; y1: number; x2: number; y2: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }
-  | { type: "bubble"; id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; groupId?: string }
+  | { type: "rect"; id: string; x: number; y: number; width: number; height: number; cornerRadius?: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }
+  | { type: "ellipse"; id: string; cx: number; cy: number; rx: number; ry: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }
+  | { type: "arrow"; id: string; x1: number; y1: number; x2: number; y2: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }
+  | { type: "bubble"; id: string; x: number; y: number; width: number; height: number; stroke: string; fill: string; lineWidth: number; label?: string; labelFontSize?: number; labelFontFamily?: string; labelFontColor?: string; labelAlignH?: LabelHorizontalAlign; labelAlignV?: LabelVerticalAlign; groupId?: string }
   | { type: "text"; id: string; x: number; y: number; text: string; fontSize: number; fontFamily?: string; fontColor?: string; stroke: string; fill: string; lineWidth: number; groupId?: string }
   | { type: "table"; id: string; x: number; y: number; width: number; height: number; rows: number; cols: number; cells: string[][]; fontSize: number; fontFamily?: string; fontColor?: string; stroke: string; fill: string; lineWidth: number; groupId?: string }
   | { type: "image"; id: string; x: number; y: number; width: number; height: number; dataUrl: string; stroke: string; fill: string; lineWidth: number; groupId?: string };
@@ -502,6 +526,9 @@ export function reviveShapes(data: ShapeJSON[]): Shape[] {
 /** Messages from WebView to Extension */
 export type WebviewToExtMessage =
   | { command: "save"; svgContent: string }
+  | { command: "saveAndClose"; svgContent: string }
+  | { command: "close" }
+  | { command: "closeWithoutSave" }
   | { command: "ready" }
   | { command: "listTemplates" }
   | { command: "saveTemplate"; name: string; shapes: ShapeJSON[] }

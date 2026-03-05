@@ -24,6 +24,10 @@ function postMessage(msg: WebviewToExtMessage): void {
   vscode.postMessage(msg);
 }
 
+function buildSvgContent(shapes: Shape[], style: "plain" | "sketch" | "pencil", width: number, height: number): string {
+  return shapesToSvgString(shapes, width, height, style);
+}
+
 interface WebviewState {
   shapes: ShapeJSON[];
 }
@@ -102,6 +106,129 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+    return true;
+  }
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return target.isContentEditable;
+}
+
+const vimBarStyle = document.createElement("style");
+vimBarStyle.textContent = `
+  #vim-command-bar {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 100;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--vscode-focusBorder, #007acc);
+    border-radius: 4px;
+    background: var(--vscode-editorWidget-background);
+    color: var(--vscode-editorWidget-foreground, var(--vscode-editor-foreground));
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
+  #vim-command-bar.visible { display: flex; }
+  #vim-command-prefix { opacity: 0.9; }
+  #vim-command-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    color: inherit;
+    border: none;
+    outline: none;
+    font: inherit;
+  }
+`;
+document.head.appendChild(vimBarStyle);
+
+const vimBar = document.createElement("div");
+vimBar.id = "vim-command-bar";
+vimBar.innerHTML = `<span id="vim-command-prefix">:</span><input id="vim-command-input" type="text" autocomplete="off" spellcheck="false" aria-label="Vim command">`;
+document.body.appendChild(vimBar);
+const vimCommandInput = document.getElementById("vim-command-input") as HTMLInputElement;
+
+function closeVimCommandBar(clear = true): void {
+  vimBar.classList.remove("visible");
+  if (clear) {
+    vimCommandInput.value = "";
+  }
+  (canvas as HTMLCanvasElement).focus();
+}
+
+function openVimCommandBar(): void {
+  vimBar.classList.add("visible");
+  vimCommandInput.value = "";
+  vimCommandInput.focus();
+}
+
+function sendSave(closeAfterSave: boolean): void {
+  const shapes = editor.getShapes();
+  const { width, height } = editor.getCanvasSize();
+  const svgContent = buildSvgContent(shapes, editor.renderStyle, width, height);
+  if (closeAfterSave) {
+    postMessage({ command: "saveAndClose", svgContent });
+    return;
+  }
+  postMessage({ command: "save", svgContent });
+}
+
+function runVimCommand(commandText: string): void {
+  const normalized = commandText.trim().toLowerCase();
+  switch (normalized) {
+    case "q":
+      postMessage({ command: "close" });
+      closeVimCommandBar();
+      return;
+    case "q!":
+      postMessage({ command: "closeWithoutSave" });
+      closeVimCommandBar();
+      return;
+    case "w":
+      sendSave(false);
+      closeVimCommandBar();
+      return;
+    case "wq":
+      sendSave(true);
+      closeVimCommandBar();
+      return;
+    default:
+      vimCommandInput.select();
+      return;
+  }
+}
+
+vimCommandInput.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeVimCommandBar();
+    return;
+  }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    runVimCommand(vimCommandInput.value);
+  }
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.isComposing) { return; }
+  if (e.key === "Escape" && vimBar.classList.contains("visible")) {
+    e.preventDefault();
+    closeVimCommandBar();
+    return;
+  }
+  if (e.key === ":" && !e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget(e.target)) {
+    e.preventDefault();
+    openVimCommandBar();
+  }
+});
+
 window.addEventListener("paste", async (e) => {
   if (!screenshotPasteEnabled) { return; }
   const items = e.clipboardData?.items;
@@ -133,10 +260,13 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 const strokeInput = document.getElementById("stroke-color") as HTMLInputElement;
 const fillInput = document.getElementById("fill-color") as HTMLInputElement;
 const lineWidthInput = document.getElementById("line-width") as HTMLInputElement;
+const cornerRadiusInput = document.getElementById("corner-radius") as HTMLInputElement;
 const borderlessInput = document.getElementById("borderless") as HTMLInputElement;
 const fontColorInput = document.getElementById("font-color") as HTMLInputElement;
 const fontSizeInput = document.getElementById("font-size") as HTMLInputElement;
 const fontFamilySelect = document.getElementById("font-family") as HTMLSelectElement;
+const labelAlignHSelect = document.getElementById("label-align-h") as HTMLSelectElement;
+const labelAlignVSelect = document.getElementById("label-align-v") as HTMLSelectElement;
 let lineWidthBeforeBorderless = Math.max(1, parseInt(lineWidthInput.value, 10) || DEFAULT_DRAW_STYLE.lineWidth);
 let refreshColorPalette = () => {};
 
@@ -146,20 +276,26 @@ function normalizeColorForPicker(value: string, fallback: string): string {
   return isHex ? v : fallback;
 }
 
-function applyStyleToControlsAndEditor(style: { stroke: string; fill: string; lineWidth: number; fontSize?: number; fontFamily?: string; fontColor?: string }): void {
+function applyStyleToControlsAndEditor(style: { stroke: string; fill: string; lineWidth: number; cornerRadius?: number; fontSize?: number; fontFamily?: string; fontColor?: string; labelAlignH?: "left" | "center" | "right"; labelAlignV?: "top" | "middle" | "bottom" }): void {
   const stroke = normalizeColorForPicker(style.stroke, DEFAULT_DRAW_STYLE.stroke);
   const fill = normalizeColorForPicker(style.fill, DEFAULT_DRAW_STYLE.fill);
   const width = Math.max(0, Math.round(style.lineWidth));
+  const cornerRadius = Math.max(0, Math.round(style.cornerRadius ?? DEFAULT_DRAW_STYLE.cornerRadius));
   const fontSize = style.fontSize ?? DEFAULT_DRAW_STYLE.fontSize;
   const fontFamily = style.fontFamily ?? DEFAULT_DRAW_STYLE.fontFamily;
   const fontColor = normalizeColorForPicker(style.fontColor ?? DEFAULT_DRAW_STYLE.fontColor, DEFAULT_DRAW_STYLE.fontColor);
+  const labelAlignH = style.labelAlignH ?? DEFAULT_DRAW_STYLE.labelAlignH;
+  const labelAlignV = style.labelAlignV ?? DEFAULT_DRAW_STYLE.labelAlignV;
 
   strokeInput.value = stroke;
   fillInput.value = fill;
   lineWidthInput.value = String(width);
+  cornerRadiusInput.value = String(cornerRadius);
   fontColorInput.value = fontColor;
   fontSizeInput.value = String(fontSize);
   fontFamilySelect.value = fontFamily;
+  labelAlignHSelect.value = labelAlignH;
+  labelAlignVSelect.value = labelAlignV;
 
   const borderless = width === 0;
   borderlessInput.checked = borderless;
@@ -168,7 +304,7 @@ function applyStyleToControlsAndEditor(style: { stroke: string; fill: string; li
     lineWidthBeforeBorderless = Math.max(1, width);
   }
 
-  editor.setCurrentStyle({ stroke, fill, lineWidth: width, fontSize, fontFamily, fontColor });
+  editor.setCurrentStyle({ stroke, fill, lineWidth: width, cornerRadius, fontSize, fontFamily, fontColor, labelAlignH, labelAlignV });
   refreshColorPalette();
 }
 
@@ -245,6 +381,10 @@ lineWidthInput.addEventListener("input", () => {
   }
   editor.setStyle({ lineWidth: next });
 });
+cornerRadiusInput.addEventListener("input", () => {
+  const next = Math.max(0, parseInt(cornerRadiusInput.value, 10) || 0);
+  editor.setStyle({ cornerRadius: next });
+});
 borderlessInput.addEventListener("change", () => {
   if (borderlessInput.checked) {
     const current = Math.max(0, parseInt(lineWidthInput.value, 10) || 0);
@@ -272,6 +412,12 @@ fontSizeInput.addEventListener("input", () => {
 fontFamilySelect.addEventListener("change", () => {
   editor.setStyle({ fontFamily: fontFamilySelect.value });
 });
+labelAlignHSelect.addEventListener("change", () => {
+  editor.setStyle({ labelAlignH: labelAlignHSelect.value as "left" | "center" | "right" });
+});
+labelAlignVSelect.addEventListener("change", () => {
+  editor.setStyle({ labelAlignV: labelAlignVSelect.value as "top" | "middle" | "bottom" });
+});
 
 setupColorPalette();
 
@@ -280,6 +426,9 @@ applyStyleToControlsAndEditor({
   stroke: strokeInput.value,
   fill: fillInput.value,
   lineWidth: parseInt(lineWidthInput.value, 10) || DEFAULT_DRAW_STYLE.lineWidth,
+  cornerRadius: parseInt(cornerRadiusInput.value, 10) || DEFAULT_DRAW_STYLE.cornerRadius,
+  labelAlignH: labelAlignHSelect.value as "left" | "center" | "right",
+  labelAlignV: labelAlignVSelect.value as "top" | "middle" | "bottom",
 });
 
 // Action buttons
@@ -306,10 +455,7 @@ btnStyle?.addEventListener("click", () => {
 editor.setOnStyleCycled(() => syncStyleButton());
 
 document.getElementById("btn-save")!.addEventListener("click", () => {
-  const shapes = editor.getShapes();
-  const { width, height } = editor.getCanvasSize();
-  const svgContent = shapesToSvgString(shapes, width, height, editor.renderStyle);
-  postMessage({ command: "save", svgContent });
+  sendSave(false);
 });
 
 const templateNameInput = document.getElementById("template-name") as HTMLInputElement;
@@ -486,6 +632,36 @@ function _skEllipse(cx: number, cy: number, rx: number, ry: number, rand: () => 
 }
 // ────────────────────────────────────────────────────────────────
 
+function resolveSvgLabelPosition(
+  shape: RectShape | EllipseShape | ArrowShape | BubbleShape,
+  defaultX: number,
+  defaultY: number,
+  fontSize: number,
+): { x: number; y: number; anchor: "start" | "middle" | "end"; baseline: "hanging" | "central" | "text-after-edge" } {
+  const bounds = shape.getBounds();
+  const pad = 8;
+  const h = shape.labelAlignH ?? "center";
+  const v = shape.labelAlignV ?? "middle";
+  let x = defaultX;
+  let y = defaultY;
+  if (h === "left") {
+    x = bounds.minX + pad;
+  } else if (h === "right") {
+    x = bounds.maxX - pad;
+  }
+  if (v === "top") {
+    y = bounds.minY + pad + fontSize / 2;
+  } else if (v === "bottom") {
+    y = bounds.maxY - pad - fontSize / 2;
+  }
+  return {
+    x,
+    y,
+    anchor: h === "left" ? "start" : h === "right" ? "end" : "middle",
+    baseline: v === "top" ? "hanging" : v === "bottom" ? "text-after-edge" : "central",
+  };
+}
+
 function shapesToSvgString(shapes: Shape[], width: number, height: number, style: "plain" | "sketch" | "pencil" = "plain"): string {
   const sketchy = style !== "plain";
   const diagramData: DiagramData = { version: 1, shapes };
@@ -508,24 +684,29 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number, style
   for (const shape of shapes) {
     const common = `data-shape-id="${shape.id}" stroke="${shape.stroke}" fill="${shape.fill}" stroke-width="${shape.lineWidth}"`;
     if (shape instanceof RectShape) {
+      const radius = Math.max(0, Math.min(shape.cornerRadius ?? 0, Math.min(shape.width, shape.height) / 2));
+      const radiusAttr = radius > 0 ? ` rx="${radius}" ry="${radius}"` : "";
       if (sketchy) {
         const rand = _skRand(_skSeed(shape.id));
         if (shape.fill !== "none" && shape.fill !== "transparent") {
-          lines.push(`  <rect data-shape-id="${shape.id}" fill="${shape.fill}" stroke="none" x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"/>`);
+          lines.push(`  <rect data-shape-id="${shape.id}" fill="${shape.fill}" stroke="none" x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"${radiusAttr}/>`);
         }
-        if (shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent") {
+        if (shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent" && radius === 0) {
           const d = _skRect(shape.x, shape.y, shape.width, shape.height, rand);
           lines.push(`  <path data-shape-id="${shape.id}" fill="none" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}" d="${d}"/>`);
+        } else if (shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent" && radius > 0) {
+          lines.push(`  <rect data-shape-id="${shape.id}" fill="none" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}" x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"${radiusAttr}/>`);
         }
       } else {
-        lines.push(`  <rect ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"/>`);
+        lines.push(`  <rect ${common} x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"${radiusAttr}/>`);
       }
       if (shape.label) {
-        const lx = shape.x + shape.width / 2;
-        const ly = shape.y + shape.height / 2;
         const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
+        const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
+        const fc = shape.labelFontColor ?? shape.stroke;
+        const pos = resolveSvgLabelPosition(shape, shape.x + shape.width / 2, shape.y + shape.height / 2, fs);
         const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+        lines.push(`  <text x="${pos.x}" y="${pos.y}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="${pos.anchor}" dominant-baseline="${pos.baseline}">${esc}</text>`);
       }
     } else if (shape instanceof EllipseShape) {
       if (sketchy) {
@@ -542,8 +723,11 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number, style
       }
       if (shape.label) {
         const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
+        const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
+        const fc = shape.labelFontColor ?? shape.stroke;
+        const pos = resolveSvgLabelPosition(shape, shape.cx, shape.cy, fs);
         const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${shape.cx}" y="${shape.cy}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+        lines.push(`  <text x="${pos.x}" y="${pos.y}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="${pos.anchor}" dominant-baseline="${pos.baseline}">${esc}</text>`);
       }
     } else if (shape instanceof ArrowShape) {
       if (sketchy) {
@@ -566,8 +750,11 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number, style
         const lx = (shape.x1 + shape.x2) / 2;
         const ly = (shape.y1 + shape.y2) / 2 - 10;
         const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
+        const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
+        const fc = shape.labelFontColor ?? shape.stroke;
+        const pos = resolveSvgLabelPosition(shape, lx, ly, fs);
         const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+        lines.push(`  <text x="${pos.x}" y="${pos.y}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="${pos.anchor}" dominant-baseline="${pos.baseline}">${esc}</text>`);
       }
     } else if (shape instanceof BubbleShape) {
       const x = shape.x, y = shape.y, w = shape.width, h = shape.height;
@@ -595,11 +782,12 @@ function shapesToSvgString(shapes: Shape[], width: number, height: number, style
       }
       lines.push(`  <path ${common} d="${path}"/>`);
       if (shape.label) {
-        const lx = shape.x + shape.width / 2;
-        const ly = shape.y + shape.height / 2;
         const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
+        const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
+        const fc = shape.labelFontColor ?? shape.stroke;
+        const pos = resolveSvgLabelPosition(shape, shape.x + shape.width / 2, shape.y + shape.height / 2, fs);
         const esc = shape.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        lines.push(`  <text x="${lx}" y="${ly}" font-size="${fs}" font-family="${shapeDefaults.fontFamily}" fill="${shape.stroke}" text-anchor="middle" dominant-baseline="central">${esc}</text>`);
+        lines.push(`  <text x="${pos.x}" y="${pos.y}" font-size="${fs}" font-family="${ff}" fill="${fc}" text-anchor="${pos.anchor}" dominant-baseline="${pos.baseline}">${esc}</text>`);
       }
     } else if (shape instanceof TextShape) {
       const escaped = shape.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

@@ -177,6 +177,11 @@ export class SelectTool implements Tool {
     return new Set(this._selectedIds);
   }
 
+  /** Set selected shape IDs (for external updates like Connect mode) */
+  setSelectedIds(ids: Set<string>): void {
+    this._selectedIds = new Set(ids);
+  }
+
   /** Get the rubber-band rectangle if currently dragging a marquee */
   getRubberband(): RubberBand | undefined {
     if (!this.rubberBandStart || !this.rubberBandCurrent) { return undefined; }

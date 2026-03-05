@@ -90,22 +90,25 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
     switch (shape.type) {
       case "rect": {
         const rand = sketchRand(svgSeed(shape.id));
+        const radius = Math.max(0, Math.min(shape.cornerRadius ?? 0, Math.min(shape.width, shape.height) / 2));
+        const radiusAttr = radius > 0 ? ` rx="${radius}" ry="${radius}"` : "";
         // Clean fill rectangle
         if (shape.fill !== "none" && shape.fill !== "transparent") {
-          lines.push(`  <rect data-shape-id="${shape.id}" fill="${shape.fill}" stroke="none" x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"/>`);
+          lines.push(`  <rect data-shape-id="${shape.id}" fill="${shape.fill}" stroke="none" x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"${radiusAttr}/>`);
         }
         // Sketchy stroke path
-        if (shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent") {
+        if (shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent" && radius === 0) {
           const d = sketchySvgRect(shape.x, shape.y, shape.width, shape.height, rand);
           lines.push(`  <path data-shape-id="${shape.id}" fill="none" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}" d="${d}"/>`);
+        } else if (shape.lineWidth > 0 && shape.stroke !== "none" && shape.stroke !== "transparent" && radius > 0) {
+          lines.push(`  <rect data-shape-id="${shape.id}" fill="none" stroke="${shape.stroke}" stroke-width="${shape.lineWidth}" x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}"${radiusAttr}/>`);
         }
         if (shape.label) {
-          const lx = shape.x + shape.width / 2;
-          const ly = shape.y + shape.height / 2;
           const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
           const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
-          lines.push(labelToSvgText(shape.label, lx, ly, fs, ff, fc));
+          const attrs = getLabelSvgAttrs(shape, fs, shape.x + shape.width / 2, shape.y + shape.height / 2);
+          lines.push(labelToSvgText(shape.label, attrs.x, attrs.y, fs, ff, fc, attrs.attrs));
         }
         break;
       }
@@ -124,7 +127,8 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
           const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
           const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
-          lines.push(labelToSvgText(shape.label, shape.cx, shape.cy, fs, ff, fc));
+          const attrs = getLabelSvgAttrs(shape, fs, shape.cx, shape.cy);
+          lines.push(labelToSvgText(shape.label, attrs.x, attrs.y, fs, ff, fc, attrs.attrs));
         }
         break;
       }
@@ -149,7 +153,8 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
           const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
           const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
-          lines.push(labelToSvgText(shape.label, lx, ly, fs, ff, fc));
+          const attrs = getLabelSvgAttrs(shape, fs, lx, ly);
+          lines.push(labelToSvgText(shape.label, attrs.x, attrs.y, fs, ff, fc, attrs.attrs));
         }
         break;
       }
@@ -175,12 +180,11 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
         ].join(" ");
         lines.push(`  <path ${common} d="${path}"/>`);
         if (shape.label) {
-          const lx = shape.x + shape.width / 2;
-          const ly = shape.y + shape.height / 2;
           const fs = shape.labelFontSize ?? shapeDefaults.fontSize;
           const ff = shape.labelFontFamily ?? shapeDefaults.fontFamily;
           const fc = shape.labelFontColor ?? shape.stroke;
-          lines.push(labelToSvgText(shape.label, lx, ly, fs, ff, fc));
+          const attrs = getLabelSvgAttrs(shape, fs, shape.x + shape.width / 2, shape.y + shape.height / 2);
+          lines.push(labelToSvgText(shape.label, attrs.x, attrs.y, fs, ff, fc, attrs.attrs));
         }
         break;
       }
@@ -202,6 +206,33 @@ export function shapesToSvg(shapes: Shape[], width = 800, height = 600): string 
 
   lines.push("</svg>");
   return lines.join("\n");
+}
+
+function getLabelSvgAttrs(
+  shape: { getBounds(): { minX: number; minY: number; maxX: number; maxY: number }; labelAlignH?: "left" | "center" | "right"; labelAlignV?: "top" | "middle" | "bottom" },
+  fontSize: number,
+  defaultX: number,
+  defaultY: number,
+): { x: number; y: number; attrs: string } {
+  const bounds = shape.getBounds();
+  const pad = 8;
+  const h = shape.labelAlignH ?? "center";
+  const v = shape.labelAlignV ?? "middle";
+  let x = defaultX;
+  let y = defaultY;
+  if (h === "left") {
+    x = bounds.minX + pad;
+  } else if (h === "right") {
+    x = bounds.maxX - pad;
+  }
+  if (v === "top") {
+    y = bounds.minY + pad + fontSize / 2;
+  } else if (v === "bottom") {
+    y = bounds.maxY - pad - fontSize / 2;
+  }
+  const textAnchor = h === "left" ? "start" : h === "right" ? "end" : "middle";
+  const baseline = v === "top" ? "hanging" : v === "bottom" ? "text-after-edge" : "central";
+  return { x, y, attrs: ` text-anchor="${textAnchor}" dominant-baseline="${baseline}"` };
 }
 
 /** Parse diagram data from SVG content */

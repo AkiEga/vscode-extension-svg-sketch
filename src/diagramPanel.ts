@@ -96,6 +96,15 @@ export class DiagramPanel {
         this.pendingInitSvgContent = undefined;
         await this.postTemplatesList();
         break;
+      case "saveAndClose":
+        this.panel.dispose();
+        break;
+      case "close":
+        this.panel.dispose();
+        break;
+      case "closeWithoutSave":
+        this.panel.dispose();
+        break;
       case "listTemplates":
         await this.postTemplatesList();
         break;
@@ -317,7 +326,6 @@ export class DiagramPanel {
     <button data-tool="ellipse" title="Ellipse (E)">◯ Ellipse</button>
     <button data-tool="arrow" title="Arrow (A)">→ Arrow</button>
     <button data-tool="text" title="Text (T)">T Text</button>
-    <button data-tool="bubble" title="Speech Bubble (B)">💬 Bubble</button>
     <button data-tool="table" title="Table (G)">⊞ Table</button>
     <div class="separator"></div>
     <label>Stroke</label><input type="color" id="stroke-color" value="${shapeDefaults.stroke}">
@@ -328,6 +336,7 @@ export class DiagramPanel {
       <span class="palette-label">F</span><div id="palette-fill" class="palette-swatches"></div>
     </div>
     <label>Width</label><input type="number" id="line-width" value="${shapeDefaults.lineWidth}" min="0" max="20">
+    <label>Round</label><input type="number" id="corner-radius" value="0" min="0" max="80" title="Rect corner radius">
     <label class="check-inline"><input type="checkbox" id="borderless">No border</label>
     <div class="separator"></div>
     <label>Font</label><input type="color" id="font-color" value="${shapeDefaults.fontColor}">
@@ -337,6 +346,16 @@ export class DiagramPanel {
       <option value="serif">Serif</option>
       <option value="monospace">Monospace</option>
       <option value="cursive">Cursive</option>
+    </select>
+    <select id="label-align-h" title="Label horizontal align">
+      <option value="left">Label Left</option>
+      <option value="center" selected>Label Center</option>
+      <option value="right">Label Right</option>
+    </select>
+    <select id="label-align-v" title="Label vertical align">
+      <option value="top">Label Top</option>
+      <option value="middle" selected>Label Middle</option>
+      <option value="bottom">Label Bottom</option>
     </select>
     <div class="separator"></div>
     <button id="btn-undo" title="Undo (Ctrl+Z)">↶ Undo</button>
