@@ -444,22 +444,12 @@ export type WebviewToExtMessage =
   | { command: "saveAndClose"; svgContent: string }
   | { command: "close" }
   | { command: "closeWithoutSave" }
-  | { command: "ready" }
-  | { command: "listTemplates" }
-  | { command: "saveTemplate"; name: string; shapes: ShapeJSON[] }
-  | { command: "saveTemplateSvg"; name: string; svgContent: string }
-  | { command: "applyTemplate"; templateId: string }
-  | { command: "deleteTemplate"; templateId: string };
+  | { command: "ready" };
 
 /** Messages from Extension to WebView */
 export type ExtToWebviewMessage =
   | { command: "load"; shapes: ShapeJSON[] }
-  | { command: "init"; svgContent?: string; settings?: EditorSettings }
-  | { command: "templatesList"; templates: DiagramTemplateSummary[] }
-  | { command: "templatePayload"; templateId: string; name: string; shapes: ShapeJSON[] }
-  | { command: "templateSaved"; template: DiagramTemplateSummary }
-  | { command: "templateDeleted"; templateId: string }
-  | { command: "error"; message: string };
+  | { command: "init"; svgContent?: string; settings?: EditorSettings };
 
 export type ToolType = "rect" | "ellipse" | "arrow" | "text" | "table" | "select";
 
@@ -469,21 +459,4 @@ export interface DiagramData {
   shapes: Shape[];
 }
 
-/** Stored diagram template */
-export interface DiagramTemplate {
-  id: string;
-  name: string;
-  createdAt: number;
-  updatedAt: number;
-  thumbnailSvg: string;
-  diagram: DiagramData;
-}
 
-/** Lightweight template info for list rendering */
-export interface DiagramTemplateSummary {
-  id: string;
-  name: string;
-  updatedAt: number;
-  shapeCount: number;
-  thumbnailSvg: string;
-}

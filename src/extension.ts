@@ -1,11 +1,8 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { SvgEditorProvider } from "./svgEditorProvider";
-import { ensureTemplateStorageWithSeed } from "./fileUtils";
 
 export function activate(context: vscode.ExtensionContext) {
-  void ensureTemplateStorageWithSeed();
-
   // Custom editor for .svg files
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(

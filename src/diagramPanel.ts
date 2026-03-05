@@ -1,12 +1,5 @@
 import * as vscode from "vscode";
-import { reviveShapes, type WebviewToExtMessage, type ExtToWebviewMessage, type ShapeJSON } from "./types";
-import {
-  listTemplates,
-  saveTemplate,
-  saveTemplateSvg,
-  loadTemplate,
-  deleteTemplate,
-} from "./fileUtils";
+import { reviveShapes, type WebviewToExtMessage, type ExtToWebviewMessage } from "./types";
 import { getEditorSettings } from "./settings";
 import { shapeDefaults } from "./shapeConfig";
 
@@ -94,7 +87,6 @@ export class DiagramPanel {
       case "ready":
         this.postMessage({ command: "init", svgContent: this.pendingInitSvgContent, settings: getEditorSettings() });
         this.pendingInitSvgContent = undefined;
-        await this.postTemplatesList();
         break;
       case "saveAndClose":
         this.panel.dispose();
@@ -105,62 +97,7 @@ export class DiagramPanel {
       case "closeWithoutSave":
         this.panel.dispose();
         break;
-      case "listTemplates":
-        await this.postTemplatesList();
-        break;
-      case "saveTemplate": {
-        const saved = await saveTemplate(msg.name, reviveShapes(msg.shapes));
-        if (!saved) {
-          this.postMessage({ command: "error", message: "Template name and shapes are required." });
-          return;
-        }
-        this.postMessage({ command: "templateSaved", template: saved });
-        await this.postTemplatesList();
-        break;
-      }
-      case "saveTemplateSvg": {
-        if (!msg.name.trim() || !msg.svgContent.trim()) {
-          this.postMessage({ command: "error", message: "Template name and SVG content are required." });
-          return;
-        }
-        const path = await saveTemplateSvg(msg.name, msg.svgContent);
-        if (!path) {
-          this.postMessage({ command: "error", message: "Failed to save SVG template." });
-          return;
-        }
-        void vscode.window.showInformationMessage(`Template SVG saved: ${path}`);
-        break;
-      }
-      case "applyTemplate": {
-        const template = await loadTemplate(msg.templateId);
-        if (!template) {
-          this.postMessage({ command: "error", message: "Template not found." });
-          return;
-        }
-        this.postMessage({
-          command: "templatePayload",
-          templateId: template.id,
-          name: template.name,
-          shapes: template.diagram.shapes as unknown as ShapeJSON[],
-        });
-        break;
-      }
-      case "deleteTemplate": {
-        const ok = await deleteTemplate(msg.templateId);
-        if (!ok) {
-          this.postMessage({ command: "error", message: "Failed to delete template." });
-          return;
-        }
-        this.postMessage({ command: "templateDeleted", templateId: msg.templateId });
-        await this.postTemplatesList();
-        break;
-      }
     }
-  }
-
-  private async postTemplatesList(): Promise<void> {
-    const templates = await listTemplates();
-    this.postMessage({ command: "templatesList", templates });
   }
 
   private getHtmlContent(): string {
@@ -233,50 +170,34 @@ export class DiagramPanel {
     #canvas { display: block; background: #ffffff; cursor: crosshair; }
     #canvas.tool-select { cursor: default; }
 
-    #template-panel {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      width: 280px;
-      max-height: calc(100% - 24px);
-      overflow: auto;
-      background: var(--vscode-editorWidget-background);
-      border: 1px solid var(--vscode-widget-border);
-      border-radius: 6px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-      padding: 8px;
+    .shape-insert-wrapper { position: relative; }
+    #shape-insert-menu {
       display: none;
-      z-index: 20;
-    }
-    #template-panel.open { display: block; }
-    #template-panel h3 { font-size: 12px; margin-bottom: 8px; }
-    #template-list { display: grid; gap: 8px; }
-    .template-item {
-      border: 1px solid var(--vscode-panel-border);
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 2px;
+      z-index: 40;
+      background: var(--vscode-menu-background, var(--vscode-editorWidget-background, #fff));
+      color: var(--vscode-menu-foreground, var(--vscode-editor-foreground, #000));
+      border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, #ccc));
       border-radius: 4px;
-      padding: 6px;
-      display: grid;
-      gap: 6px;
-      background: var(--vscode-sideBar-background);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      padding: 4px 0;
+      min-width: 120px;
     }
-    .template-title { font-size: 12px; font-weight: 600; }
-    .template-meta { font-size: 11px; opacity: 0.8; }
-    .template-preview {
-      width: 100%;
-      height: 80px;
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 3px;
-      background: #fff;
-      object-fit: contain;
+    #shape-insert-menu.open { display: block; }
+    #shape-insert-menu button {
+      display: block; width: 100%;
+      padding: 5px 14px; text-align: left;
+      background: transparent !important;
+      color: var(--vscode-menu-foreground, var(--vscode-editor-foreground, #000)) !important;
+      border: none !important; border-radius: 0 !important;
+      font-size: 12px; cursor: pointer;
     }
-    .template-actions { display: flex; gap: 6px; }
-    .template-actions button { flex: 1; }
-    #template-name {
-      width: 160px;
-      padding: 2px 4px;
-      background: var(--vscode-input-background);
-      color: var(--vscode-input-foreground);
-      border: 1px solid var(--vscode-input-border);
+    #shape-insert-menu button:hover {
+      background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground, #094771)) !important;
+      color: var(--vscode-menu-selectionForeground, var(--vscode-list-hoverForeground, #fff)) !important;
     }
     #table-toolbar {
       display: flex; gap: 4px; padding: 4px 8px;
@@ -322,11 +243,16 @@ export class DiagramPanel {
 <body>
   <div id="toolbar">
     <button data-tool="select" class="active" title="Select (V)">⇱ Select</button>
-    <button data-tool="rect" title="Rectangle (R)">▭ Rect</button>
-    <button data-tool="ellipse" title="Ellipse (E)">◯ Ellipse</button>
-    <button data-tool="arrow" title="Arrow (A)">→ Arrow</button>
-    <button data-tool="text" title="Text (T)">T Text</button>
-    <button data-tool="table" title="Table (G)">⊞ Table</button>
+    <div class="shape-insert-wrapper">
+      <button id="btn-insert-shape" title="Insert Shape">⊕ Insert Shape ▾</button>
+      <div id="shape-insert-menu">
+        <button data-tool="rect" title="Rectangle">▭ Rect</button>
+        <button data-tool="ellipse" title="Ellipse">◯ Ellipse</button>
+        <button data-tool="arrow" title="Arrow">→ Arrow</button>
+        <button data-tool="text" title="Text">T Text</button>
+        <button data-tool="table" title="Table">⊞ Table</button>
+      </div>
+    </div>
     <div class="separator"></div>
     <label>Stroke</label><input type="color" id="stroke-color" value="${shapeDefaults.stroke}">
     <label>Fill</label><input type="color" id="fill-color" value="${shapeDefaults.fill}">
@@ -365,11 +291,6 @@ export class DiagramPanel {
     <div class="row-break"></div>
     <button id="btn-style" title="Render style (H): Plain → Sketch → Pencil">🖊 Style: Plain</button>
     <div class="separator"></div>
-    <input id="template-name" type="text" placeholder="Template name">
-    <button id="btn-save-template" title="Save current diagram as template">Save Template</button>
-    <button id="btn-save-template-svg" title="Save current diagram as SVG template">Save Template SVG</button>
-    <button id="btn-toggle-templates" title="Show templates">Templates</button>
-    <div class="separator"></div>
     <button id="btn-save" title="Save SVG">💾 Save</button>
   </div>
   <div id="table-toolbar">
@@ -381,10 +302,6 @@ export class DiagramPanel {
   </div>
   <div id="canvas-container">
     <canvas id="canvas"></canvas>
-    <aside id="template-panel" aria-label="Template panel">
-      <h3>Presentation Templates</h3>
-      <div id="template-list"></div>
-    </aside>
   </div>
   <script nonce="${nonce}" src="${webviewUri}"></script>
 </body>

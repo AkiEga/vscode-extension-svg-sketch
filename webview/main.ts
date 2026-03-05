@@ -5,8 +5,6 @@ import type {
   ToolType,
   DiagramData,
   Shape,
-  ShapeJSON,
-  DiagramTemplateSummary,
   WebviewToExtMessage,
   ExtToWebviewMessage,
 } from "./shared";
@@ -81,18 +79,56 @@ document.getElementById("btn-add-col")!.addEventListener("click", () => editor.a
 document.getElementById("btn-del-col")!.addEventListener("click", () => editor.deleteTableColumn());
 
 // --- Toolbar bindings ---
-const toolButtons = document.querySelectorAll<HTMLButtonElement>("#toolbar button[data-tool]");
+const toolButtons = document.querySelectorAll<HTMLButtonElement>("#toolbar button[data-tool], #shape-insert-menu button[data-tool]");
+
+// Insert Shape dropdown
+const btnInsertShape = document.getElementById("btn-insert-shape") as HTMLButtonElement | null;
+const shapeInsertMenu = document.getElementById("shape-insert-menu") as HTMLElement | null;
+const SHAPE_TOOL_LABELS: Partial<Record<string, string>> = {
+  rect: "▭ Rect",
+  ellipse: "◯ Ellipse",
+  arrow: "→ Arrow",
+  text: "T Text",
+  table: "⊞ Table",
+};
+
+function closeShapeMenu(): void {
+  shapeInsertMenu?.classList.remove("open");
+}
+
+btnInsertShape?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  shapeInsertMenu?.classList.toggle("open");
+});
+
+document.addEventListener("click", () => closeShapeMenu());
+shapeInsertMenu?.addEventListener("click", (e) => e.stopPropagation());
+
+function updateInsertShapeButton(tool: ToolType): void {
+  if (!btnInsertShape) { return; }
+  const label = SHAPE_TOOL_LABELS[tool];
+  if (label) {
+    btnInsertShape.textContent = `${label} ▾`;
+    btnInsertShape.classList.add("active");
+  } else {
+    btnInsertShape.textContent = "⊕ Insert Shape ▾";
+    btnInsertShape.classList.remove("active");
+  }
+}
 
 // Sync toolbar when editor auto-switches tool (e.g. after shape creation)
 editor.setOnToolChange((tool) => {
   toolButtons.forEach((b) => b.classList.remove("active"));
   document.querySelector<HTMLButtonElement>(`button[data-tool="${tool}"]`)?.classList.add("active");
+  updateInsertShapeButton(tool);
 });
 toolButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     toolButtons.forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     editor.setTool(btn.dataset.tool as ToolType);
+    updateInsertShapeButton(btn.dataset.tool as ToolType);
+    closeShapeMenu();
   });
 });
 
@@ -103,6 +139,7 @@ window.addEventListener("keydown", (e) => {
     toolButtons.forEach((b) => b.classList.remove("active"));
     document.querySelector<HTMLButtonElement>(`button[data-tool="select"]`)?.classList.add("active");
     editor.setTool("select");
+    updateInsertShapeButton("select");
   }
 });
 
@@ -458,42 +495,6 @@ document.getElementById("btn-save")!.addEventListener("click", () => {
   sendSave(false);
 });
 
-const templateNameInput = document.getElementById("template-name") as HTMLInputElement;
-const templatePanel = document.getElementById("template-panel") as HTMLElement;
-const templateList = document.getElementById("template-list") as HTMLElement;
-const btnSaveTemplate = document.getElementById("btn-save-template") as HTMLButtonElement;
-const btnSaveTemplateSvg = document.getElementById("btn-save-template-svg") as HTMLButtonElement;
-const btnToggleTemplates = document.getElementById("btn-toggle-templates") as HTMLButtonElement;
-
-let templates: DiagramTemplateSummary[] = [];
-
-btnSaveTemplate.addEventListener("click", () => {
-  const name = templateNameInput.value.trim();
-  const shapes = editor.getShapes();
-  if (!name || shapes.length === 0) {
-    return;
-  }
-  postMessage({ command: "saveTemplate", name, shapes: JSON.parse(JSON.stringify(shapes)) as ShapeJSON[] });
-});
-
-btnSaveTemplateSvg.addEventListener("click", () => {
-  const name = templateNameInput.value.trim();
-  const shapes = editor.getShapes();
-  if (!name || shapes.length === 0) {
-    return;
-  }
-  const { width, height } = editor.getCanvasSize();
-  const svgContent = shapesToSvgString(shapes, width, height, editor.renderStyle);
-  postMessage({ command: "saveTemplateSvg", name, svgContent });
-});
-
-btnToggleTemplates.addEventListener("click", () => {
-  templatePanel.classList.toggle("open");
-  if (templatePanel.classList.contains("open")) {
-    postMessage({ command: "listTemplates" });
-  }
-});
-
 // --- Extension messages ---
 window.addEventListener("message", (event) => {
   const msg = event.data as ExtToWebviewMessage;
@@ -524,69 +525,11 @@ window.addEventListener("message", (event) => {
       applyStyleToControlsAndEditor(resolveDrawStyleFromShapes(editor.getShapes()));
       saveState(editor.getShapes());
       break;
-    case "templatesList":
-      templates = msg.templates;
-      renderTemplateList(templates);
-      break;
-    case "templatePayload":
-      editor.insertShapes(reviveShapes(msg.shapes));
-      saveState(editor.getShapes());
-      break;
-    case "templateSaved":
-      templateNameInput.value = "";
-      break;
-    case "templateDeleted":
-      templates = templates.filter((t) => t.id !== msg.templateId);
-      renderTemplateList(templates);
-      break;
-    case "error":
-      console.warn("Template error:", msg.message);
-      break;
   }
 });
 
 // Notify extension we're ready
 postMessage({ command: "ready" });
-
-function renderTemplateList(items: DiagramTemplateSummary[]): void {
-  if (items.length === 0) {
-    templateList.innerHTML = `<div class="template-meta">No templates yet.</div>`;
-    return;
-  }
-
-  const cards: string[] = [];
-  for (const item of items) {
-    const previewSrc = `data:image/svg+xml;utf8,${encodeURIComponent(item.thumbnailSvg)}`;
-    cards.push(
-      `<article class="template-item" data-id="${item.id}">`,
-      `  <div class="template-title">${escapeHtml(item.name)}</div>`,
-      `  <div class="template-meta">${item.shapeCount} shapes</div>`,
-      `  <img class="template-preview" src="${previewSrc}" alt="${escapeHtml(item.name)} preview">`,
-      "  <div class=\"template-actions\">",
-      `    <button data-action="insert" data-id="${item.id}">Insert</button>`,
-      `    <button data-action="delete" data-id="${item.id}">Delete</button>`,
-      "  </div>",
-      "</article>",
-    );
-  }
-  templateList.innerHTML = cards.join("\n");
-
-  for (const btn of Array.from(templateList.querySelectorAll<HTMLButtonElement>("button[data-action]"))) {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.id;
-      const action = btn.dataset.action;
-      if (!id || !action) {
-        return;
-      }
-      if (action === "insert") {
-        postMessage({ command: "applyTemplate", templateId: id });
-      }
-      if (action === "delete") {
-        postMessage({ command: "deleteTemplate", templateId: id });
-      }
-    });
-  }
-}
 
 // --- SVG generation (client-side for save) ---
 

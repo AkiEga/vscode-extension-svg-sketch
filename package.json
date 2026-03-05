@@ -67,11 +67,6 @@
           "default": "images",
           "description": "Directory to save SVG files when using the 'Create SVG File' command (relative to workspace root or current file directory)."
         },
-        "svg-sketch.templateDir": {
-          "type": "string",
-          "default": "",
-          "description": "Directory to store diagram templates (relative to workspace root). Leave empty to disable template features."
-        },
         "svg-sketch.defaultStroke": {
           "type": "string",
           "default": "#000000",

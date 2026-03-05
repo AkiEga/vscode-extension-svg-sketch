@@ -8,7 +8,6 @@ import { TableTool, type TableConfigRequest } from "./tools/TableTool";
 import { SelectTool, getShapeHandles } from "./tools/SelectTool";
 import type { DragHandleId } from "./tools/SelectTool";
 import { renderShapes, getShapeCenter, getShapeBoundaryPoint } from "./render";
-import { prepareTemplateInsertion } from "./templateInsert";
 import { DEFAULT_DRAW_STYLE } from "./drawStyle";
 import { EditorStateMachine } from "./EditorStateMachine";
 import { EdgeEditPanel } from "../ui/EdgeEditPanel";
@@ -251,22 +250,6 @@ export class CanvasEditor {
     this.undoStack = [];
     this.redoStack = [];
     this.render();
-  }
-
-  insertShapes(incomingShapes: Shape[]): string[] {
-    const prepared = prepareTemplateInsertion(this.shapes, incomingShapes);
-    if (prepared.shapes.length === 0) {
-      return [];
-    }
-
-    this.pushUndo();
-    this.shapes.push(...prepared.shapes);
-    const insertedIds = prepared.insertedIds;
-    this.selectedIds = new Set(insertedIds);
-    this.onSelectionChange(new Set(this.selectedIds));
-    this.onChange();
-    this.render();
-    return insertedIds;
   }
 
   deleteSelected(): void {
@@ -898,14 +881,6 @@ export class CanvasEditor {
         } else if (this.shapes.length > 0) {
           this.stateMachine.enterHintMode(this.shapes);
         }
-        return;
-      }
-
-      // `s` キー: スタイル切替
-      if (e.key === "s" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat) {
-        e.preventDefault();
-        this.cycleRenderStyle();
-        this.onStyleCycled();
         return;
       }
 
