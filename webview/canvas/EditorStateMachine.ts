@@ -1,6 +1,6 @@
-import type { ToolType, Point } from "../shared";
+import type { ToolType } from "../shared";
 
-export type EditorMode = "idle" | "objectInsertingMode" | "objSelect" | "objEdit" | "vimInsert" | "vimVisual";
+export type EditorMode = "idle" | "objectInsertingMode" | "objSelect" | "objEdit" | "vimInsert";
 export type ObjEditSubMode = "select" | "labelEdit" | "edgeEdit" | "fillStyleEdit";
 
 /** objectInsertingMode で選択可能な図形ツール一覧 */
@@ -29,9 +29,6 @@ export class EditorStateMachine {
   private _objEditSubMode: ObjEditSubMode = "select";
   private _editingShapeId = "";
 
-  // vimVisual 専用状態
-  private _visualAnchor: Point = { x: 0, y: 0 };
-
   /** モード変化後（再描画など）に呼ばれるコールバック */
   private readonly onModeChange: () => void;
 
@@ -48,7 +45,6 @@ export class EditorStateMachine {
   get selectedShapeIds(): readonly string[] { return this._selectedShapeIds; }
   get objEditSubMode(): ObjEditSubMode { return this._objEditSubMode; }
   get editingShapeId(): string { return this._editingShapeId; }
-  get visualAnchor(): Point { return { ...this._visualAnchor }; }
 
   // ----- モード遷移 -----
 
@@ -114,13 +110,6 @@ export class EditorStateMachine {
   /** idle → vimInsert: カーソル位置でテキスト入力モードに入る */
   enterVimInsert(): void {
     this._mode = "vimInsert";
-    this.onModeChange();
-  }
-
-  /** idle → vimVisual: カーソル位置を選択範囲の起点として Visual モードに入る */
-  enterVimVisual(anchor: Point): void {
-    this._visualAnchor = { ...anchor };
-    this._mode = "vimVisual";
     this.onModeChange();
   }
 

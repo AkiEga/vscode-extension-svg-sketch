@@ -1,7 +1,7 @@
 {
-  "name": "svg-sketch",
-  "displayName": "SVG Sketch",
-  "description": "Canvas-based SVG diagram editor for creating and editing .svg files in VS Code",
+  "name": "ascii-sketch",
+  "displayName": "ASCII Sketch",
+  "description": "Canvas-based ASCII art editor that embeds diagrams into Markdown code blocks in VS Code",
   "version": "0.0.1",
   "license": "MIT",
   "repository": {
@@ -16,100 +16,50 @@
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
-  "bin": {
-    "svg-sketch-cli": "./out/svg-sketch-cli.js"
-  },
   "contributes": {
     "commands": [
       {
-        "command": "svg-sketch.newDiagram",
-        "title": "SVG Sketch: New SVG"
+        "command": "ascii-sketch.newDiagram",
+        "title": "ASCII Sketch: New Diagram"
       },
       {
-        "command": "svg-sketch.editSvg",
-        "title": "SVG Sketch: Edit SVG"
-      },
-      {
-        "command": "svg-sketch.createSvgFile",
-        "title": "SVG Sketch: Create SVG File"
+        "command": "ascii-sketch.editDiagram",
+        "title": "ASCII Sketch: Edit Diagram At Cursor"
       }
     ],
     "menus": {
-      "explorer/context": [
+      "editor/context": [
         {
-          "command": "svg-sketch.newDiagram",
-          "group": "svgSketch@1"
+          "command": "ascii-sketch.newDiagram",
+          "when": "editorLangId == markdown",
+          "group": "asciiSketch@1"
         },
         {
-          "command": "svg-sketch.editSvg",
-          "when": "resourceExtname == .svg",
-          "group": "svgSketch@2"
-        }
-      ],
-      "editor/title/context": [
-        {
-          "command": "svg-sketch.editSvg",
-          "when": "resourceExtname == .svg",
-          "group": "svgSketch@1"
+          "command": "ascii-sketch.editDiagram",
+          "when": "editorLangId == markdown",
+          "group": "asciiSketch@2"
         }
       ]
     },
     "configuration": {
-      "title": "SVG Sketch",
+      "title": "ASCII Sketch",
       "properties": {
-        "svg-sketch.shapeDefaultsSvgPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to a custom SVG file that defines default shape styles. Leave empty to use the built-in defaults. The SVG must follow the same format as the bundled shapeDefaults.svg."
-        },
-        "svg-sketch.svgOutputDir": {
-          "type": "string",
-          "default": "images",
-          "description": "Directory to save SVG files when using the 'Create SVG File' command (relative to workspace root or current file directory)."
-        },
-        "svg-sketch.defaultStroke": {
-          "type": "string",
-          "default": "#000000",
-          "description": "Default stroke color for newly created shapes (hex color)."
-        },
-        "svg-sketch.defaultFill": {
-          "type": "string",
-          "default": "#ffffff",
-          "description": "Default fill color for newly created shapes (hex color)."
-        },
-        "svg-sketch.defaultLineWidth": {
+        "ascii-sketch.defaultWidth": {
           "type": "number",
-          "default": 2,
-          "minimum": 0,
-          "maximum": 20,
-          "description": "Default line width for newly created shapes."
+          "default": 80,
+          "minimum": 20,
+          "maximum": 400,
+          "description": "Initial width of the ASCII art editor grid. The buffer expands dynamically when needed."
         },
-        "svg-sketch.screenshotPasteEnabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable pasting screenshots/images from clipboard into the canvas."
-        },
-        "svg-sketch.screenshotPasteMaxWidth": {
+        "ascii-sketch.defaultHeight": {
           "type": "number",
-          "default": 1024,
-          "minimum": 128,
-          "maximum": 4096,
-          "description": "Maximum width of pasted screenshots in pixels."
+          "default": 20,
+          "minimum": 5,
+          "maximum": 200,
+          "description": "Initial height of the ASCII art editor grid. The buffer expands dynamically when needed."
         }
       }
-    },
-    "customEditors": [
-      {
-        "viewType": "svgSketch.svgEditor",
-        "displayName": "SVG Sketch Editor",
-        "selector": [
-          {
-            "filenamePattern": "*.svg"
-          }
-        ],
-        "priority": "default"
-      }
-    ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
@@ -119,9 +69,6 @@
     "lint": "eslint src/ webview/ --ext ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "cli": "node out/svg-sketch-cli.js",
-    "serve": "node out/svg-sketch-cli.js serve",
-    "test:e2e": "npx playwright test",
     "package:vsix": "npm run build && npx @vscode/vsce package --out release/"
   },
   "devDependencies": {

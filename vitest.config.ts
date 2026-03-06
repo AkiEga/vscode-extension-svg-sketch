@@ -10,6 +10,7 @@ export default defineConfig({
     alias: {
       // Allow webview tests to resolve src/types via the same path
       "@src": path.resolve(__dirname, "src"),
+      vscode: path.resolve(__dirname, "test", "vscode.mock.ts"),
     },
   },
 });

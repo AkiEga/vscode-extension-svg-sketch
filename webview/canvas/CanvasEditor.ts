@@ -479,60 +479,6 @@ export class CanvasEditor {
         }
       }
 
-      // --- Region モード (Emacs Mark-Set 相当) ---
-      if (this.stateMachine.mode === "vimVisual") {
-        // C-g / Escape: Region 解除
-        if (e.key === "Escape" || (e.ctrlKey && e.key === "g")) {
-          e.preventDefault();
-          this.stateMachine.exitToIdle();
-          this.render();
-          return;
-        }
-        // 矢印キーまたは C-b/f/n/p でカーソル移動 → 選択範囲を拡張
-        const isArrowKey = ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)
-          && !e.ctrlKey && !e.altKey && !e.metaKey;
-        const isEmacsRegion = e.ctrlKey && !e.altKey && !e.metaKey
-          && ["b","f","n","p"].includes(e.key);
-        if (isArrowKey || isEmacsRegion) {
-          e.preventDefault();
-          const step = this._gridSize;
-          if (e.key === "ArrowLeft"  || (e.ctrlKey && e.key === "b")) { this.cursorPos.x -= step; }
-          if (e.key === "ArrowRight" || (e.ctrlKey && e.key === "f")) { this.cursorPos.x += step; }
-          if (e.key === "ArrowUp"    || (e.ctrlKey && e.key === "p")) { this.cursorPos.y -= step; }
-          if (e.key === "ArrowDown"  || (e.ctrlKey && e.key === "n")) { this.cursorPos.y += step; }
-          this.render();
-          return;
-        }
-        // C-r: 枠線矩形を追加
-        if (e.ctrlKey && e.key === "r" && !e.altKey && !e.metaKey) {
-          e.preventDefault();
-          this.addBorderRect();
-          return;
-        }
-        // C-R (Ctrl+Shift+r): 枠線矩形を削除
-        if (e.ctrlKey && e.key === "R" && !e.altKey && !e.metaKey) {
-          e.preventDefault();
-          this.removeBorderRect();
-          return;
-        }
-        // C-w: 選択範囲内の図形をコピー (kill-region)
-        if (e.ctrlKey && e.key === "w") {
-          e.preventDefault();
-          this.copyShapesInVisualRange();
-          this.stateMachine.exitToIdle();
-          this.render();
-          return;
-        }
-        // C-y: ペースト (yank)
-        if (e.ctrlKey && e.key === "y") {
-          e.preventDefault();
-          this.paste();
-          this.stateMachine.exitToIdle();
-          return;
-        }
-        return; // Region モード中は他のキーを無視
-      }
-
       // --- オブジェクト挿入モード中 ---
       if (this.stateMachine.mode === "objectInsertingMode") {
         if (e.key === "Escape") {
@@ -849,16 +795,6 @@ export class CanvasEditor {
         return;
       }
 
-      // Ctrl+Space: Region モード開始 (Emacs Mark-Set)
-      if (e.ctrlKey && e.key === " " && !e.altKey && !e.metaKey) {
-        if (this.selectedIds.size === 0) {
-          e.preventDefault();
-          this.stateMachine.enterVimVisual({ ...this.cursorPos });
-          this.render();
-          return;
-        }
-      }
-
       // C-r: カーソル位置に枠線矩形を追加
       if (e.ctrlKey && e.key === "r" && !e.altKey && !e.metaKey) {
         if (this.selectedIds.size === 0) {
@@ -1105,13 +1041,12 @@ export class CanvasEditor {
     const preview = this.currentTool.getPreview();
     const rubberBand = this.selectTool.getRubberband();
     renderShapes(this.ctx, this.shapes, preview, this.selectedIds, rubberBand, this._renderStyle, this._gridSize);
-    // カーソルを描画（図形未選択時 or objectInsertingMode / vimInsert / vimVisual 時）
+    // カーソルを描画（図形未選択時 or objectInsertingMode / vimInsert 時）
     const vmode = this.stateMachine.mode;
-    if (this.selectedIds.size === 0 || vmode === "objectInsertingMode" || vmode === "vimInsert" || vmode === "vimVisual") {
+    if (this.selectedIds.size === 0 || vmode === "objectInsertingMode" || vmode === "vimInsert") {
       this.drawCursor();
     }
-    if (vmode === "vimVisual") { this.drawVisualSelection(); }
-    if (vmode === "vimInsert" || vmode === "vimVisual") { this.drawVimModeIndicator(); }
+    if (vmode === "vimInsert") { this.drawVimModeIndicator(); }
     if (this.stateMachine.mode === "objectInsertingMode") { this.drawInsertIndicator(); }
     if (this.stateMachine.mode === "objSelect") { this.drawObjSelectIndicator(); }
     if (this.stateMachine.mode === "objEdit") { this.drawObjEditIndicator(); }
@@ -1156,8 +1091,8 @@ export class CanvasEditor {
       ["C-p / ↑",            "カーソル上に移動"],
       ["C-Space",            "Region モード開始 (範囲選択)"],
       ["C-r",                "カーソルまたは選択範囲の外辺に枠線矩形を追加"],
+      ["C-r",                "カーソル位置に枠線矩形を追加/削除（トグル）"],
       ["C-R (C-Shift-r)",    "一致する枠線矩形を削除"],
-      ["C-w (Region)",       "選択範囲内の図形をコピーして Normal へ"],
       ["i",                  "Insert モード: カーソル位置にテキスト入力"],
       ["C-x i",              "図形挿入メニュー (矢印キーで選択 → Enter で確定)"],
       ["s",                  "描画スタイル切替 (Plain→Sketch→Pencil)"],
@@ -1229,32 +1164,6 @@ export class CanvasEditor {
     ctx.restore();
   }
 
-  /** Visual モードの選択範囲（アンカー〜カーソル）を描画する */
-  private drawVisualSelection(): void {
-    const ctx = this.ctx;
-    const dpr = window.devicePixelRatio || 1;
-    ctx.save();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const gs = this._gridSize;
-    const anchor = this.stateMachine.visualAnchor;
-    const cur = this.cursorPos;
-    const minX = Math.min(anchor.x, cur.x);
-    const minY = Math.min(anchor.y, cur.y);
-    const maxX = Math.max(anchor.x, cur.x) + gs;
-    const maxY = Math.max(anchor.y, cur.y) + gs;
-
-    // 選択範囲の塗りつぶし（半透明の青）
-    ctx.fillStyle = "rgba(74, 144, 217, 0.15)";
-    ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
-    // 選択範囲の枠線
-    ctx.strokeStyle = "#4a90d9";
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([4, 3]);
-    ctx.strokeRect(minX + 0.75, minY + 0.75, maxX - minX - 1.5, maxY - minY - 1.5);
-    ctx.setLineDash([]);
-    ctx.restore();
-  }
-
   /** VimモードのステータスバーをCanvas下部に描画する */
   private drawVimModeIndicator(): void {
     const ctx = this.ctx;
@@ -1271,14 +1180,6 @@ export class CanvasEditor {
     if (mode === "vimInsert") {
       label = "-- INSERT --";
       color = "rgba(56, 182, 92, 0.9)";
-    } else if (mode === "vimVisual") {
-      const gs = this._gridSize;
-      const anchor = this.stateMachine.visualAnchor;
-      const cur = this.cursorPos;
-      const cols = Math.abs(cur.x - anchor.x) / gs + 1;
-      const rows = Math.abs(cur.y - anchor.y) / gs + 1;
-      label = `-- REGION -- ${cols}×${rows} cells | C-r: 枠線 | C-R: 削除 | C-w: コピー | C-g: キャンセル`;
-      color = "rgba(130, 80, 210, 0.9)";
     }
 
     if (!label) { ctx.restore(); return; }
@@ -1304,25 +1205,14 @@ export class CanvasEditor {
   }
 
   /**
-   * カーソル位置（またはVisual選択範囲）の外辺にボーダー矩形（塗りなし）を追加する。
-   * Normal モードでは1セル分、Visual モードでは選択範囲全体。
+   * カーソル位置の外辺にボーダー矩形（塗りなし）を追加する。
    */
   private addBorderRect(): void {
     const gs = this._gridSize;
-    let rx: number, ry: number, rw: number, rh: number;
-    if (this.stateMachine.mode === "vimVisual") {
-      const anchor = this.stateMachine.visualAnchor;
-      const cur = this.cursorPos;
-      rx = Math.min(anchor.x, cur.x);
-      ry = Math.min(anchor.y, cur.y);
-      rw = Math.max(anchor.x, cur.x) + gs - rx;
-      rh = Math.max(anchor.y, cur.y) + gs - ry;
-    } else {
-      rx = this.cursorPos.x;
-      ry = this.cursorPos.y;
-      rw = gs;
-      rh = gs;
-    }
+    const rx = this.cursorPos.x;
+    const ry = this.cursorPos.y;
+    const rw = gs;
+    const rh = gs;
     const shape = new RectShape({
       id: nextId(),
       x: rx, y: ry, width: rw, height: rh,
@@ -1337,25 +1227,15 @@ export class CanvasEditor {
   }
 
   /**
-   * カーソル位置（またはVisual選択範囲）に一致するボーダー矩形を削除する。
+   * カーソル位置に一致するボーダー矩形を削除する。
    * 完全一致（誤差1px以内）する RectShape を最前面から探して削除。
    */
   private removeBorderRect(): void {
     const gs = this._gridSize;
-    let rx: number, ry: number, rw: number, rh: number;
-    if (this.stateMachine.mode === "vimVisual") {
-      const anchor = this.stateMachine.visualAnchor;
-      const cur = this.cursorPos;
-      rx = Math.min(anchor.x, cur.x);
-      ry = Math.min(anchor.y, cur.y);
-      rw = Math.max(anchor.x, cur.x) + gs - rx;
-      rh = Math.max(anchor.y, cur.y) + gs - ry;
-    } else {
-      rx = this.cursorPos.x;
-      ry = this.cursorPos.y;
-      rw = gs;
-      rh = gs;
-    }
+    const rx = this.cursorPos.x;
+    const ry = this.cursorPos.y;
+    const rw = gs;
+    const rh = gs;
     const tol = 1;
     // 最前面（末尾）から探す
     for (let i = this.shapes.length - 1; i >= 0; i--) {
@@ -1375,22 +1255,6 @@ export class CanvasEditor {
         return;
       }
     }
-  }
-
-  /** Visual モードの選択範囲内にある図形をクリップボードにコピーする */
-  private copyShapesInVisualRange(): void {
-    const gs = this._gridSize;
-    const anchor = this.stateMachine.visualAnchor;
-    const cur = this.cursorPos;
-    const minX = Math.min(anchor.x, cur.x);
-    const minY = Math.min(anchor.y, cur.y);
-    const maxX = Math.max(anchor.x, cur.x) + gs;
-    const maxY = Math.max(anchor.y, cur.y) + gs;
-    this.clipboard = this.shapes.filter((s) => {
-      const b = s.getBounds();
-      return b.minX >= minX - 1 && b.minY >= minY - 1 &&
-             b.maxX <= maxX + 1 && b.maxY <= maxY + 1;
-    }).map((s) => s.clone());
   }
 
   /** カーソル位置でテキスト入力を開始し vimInsert モードに入る */
@@ -1757,9 +1621,11 @@ export class CanvasEditor {
     if (initialChar !== undefined) {
       textarea.setSelectionRange(initialChar.length, initialChar.length);
     } else {
-      // F2 追記モード: 末尾にカーソルを置く
-      const len = textarea.value.length;
-      textarea.setSelectionRange(len, len);
+      // F2 追記モード: focus 後に DOM が確定してから末尾にカーソルを置く
+      setTimeout(() => {
+        const len = textarea.value.length;
+        textarea.setSelectionRange(len, len);
+      }, 0);
     }
 
     let committed = false;
@@ -2393,9 +2259,11 @@ export class CanvasEditor {
     if (initialChar !== undefined) {
       input.setSelectionRange(initialChar.length, initialChar.length);
     } else {
-      // F2 追記モード: 末尾にカーソルを置く
-      const len = input.value.length;
-      input.setSelectionRange(len, len);
+      // F2 追記モード: focus 後に DOM が確定してから末尾にカーソルを置く (editTextShape)
+      setTimeout(() => {
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+      }, 0);
     }
 
     let committed = false;
@@ -2470,9 +2338,15 @@ export class CanvasEditor {
     input.style.boxSizing = "border-box";
     container.appendChild(input);
     input.focus();
-    // 直接キー: 上書き（initialCharのみ）、F2/ダブルクリック: 追記（末尾にカーソル）
-    const len = input.value.length;
-    input.setSelectionRange(len, len);
+    // 直接キー: 上書き（initialChar のみ）、F2/ダブルクリック: 追記（末尾にカーソル）
+    if (initialChar !== undefined) {
+      input.setSelectionRange(initialChar.length, initialChar.length);
+    } else {
+      setTimeout(() => {
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+      }, 0);
+    }
 
     let committed = false;
 
@@ -2521,15 +2395,15 @@ export class CanvasEditor {
           this.editTableCell(shape, { x: shape.x + 1, y: shape.y + (row + 1) * rowH + 1 });
         }
       } else if (e.key === "r" && e.ctrlKey && !e.altKey && !e.metaKey) {
-        // C-r: テキストが被らない幅でセル位置に枠線矩形をトグル
+        // C-r: テキスト幅を考慮した横幅でセル位置に枠線矩形をトグル
         e.preventDefault();
         const gs = this._gridSize;
-        this.ctx.save();
-        this.ctx.font = `${shape.fontSize}px sans-serif`;
-        const measured = this.ctx.measureText(input.value).width;
-        this.ctx.restore();
+        // キャンバスの変換状態に依存しない独立したコンテキストで計測
+        const tmpCtx = document.createElement("canvas").getContext("2d")!;
+        tmpCtx.font = `${shape.fontSize}px sans-serif`;
+        const measured = tmpCtx.measureText(input.value).width;
         const fw = Math.max(gs, Math.ceil((measured + 8) / gs) * gs);
-        const tol = 1;
+        const tol = 2;
         const idx = this.shapes.findIndex((s) =>
           s instanceof RectShape &&
           Math.abs(s.x - cellX) <= tol && Math.abs(s.y - cellY) <= tol &&
