@@ -196,6 +196,7 @@ export function renderShapes(
   selectedIds: Set<string>,
   rubberBand?: RubberBand,
   style: "plain" | "sketch" | "pencil" = "plain",
+  gridSize: number = 25,
 ): void {
   // Clear full physical canvas (transform-independent)
   ctx.save();
@@ -204,7 +205,7 @@ export function renderShapes(
   ctx.restore();
 
   // Draw grid
-  drawGrid(ctx);
+  drawGrid(ctx, gridSize);
 
   // Draw all shapes
   for (const shape of shapes) {
@@ -227,13 +228,13 @@ export function renderShapes(
   }
 }
 
-function drawGrid(ctx: CanvasRenderingContext2D): void {
+function drawGrid(ctx: CanvasRenderingContext2D, gridSize: number): void {
   const dpr = window.devicePixelRatio || 1;
   const width = ctx.canvas.width / dpr;
   const height = ctx.canvas.height / dpr;
   ctx.strokeStyle = "#e8e8e8";
   ctx.lineWidth = 0.5;
-  const step = 20;
+  const step = gridSize;
   for (let x = step; x < width; x += step) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
@@ -288,7 +289,7 @@ function drawShape(ctx: CanvasRenderingContext2D, shape: Shape, style: "plain" |
           }
         }
       }
-      drawShapeLabel(ctx, s, s.x + s.width / 2, s.y + s.height / 2);
+      drawShapeLabel(ctx, s, s.x + s.width / 2, s.y + s.height / 2, "left");
       break;
     }
 
@@ -385,11 +386,12 @@ function drawShapeLabel(
   },
   defaultX: number,
   defaultY: number,
+  defaultHAlign: "left" | "center" | "right" = "center",
 ): void {
   if (!shape.label) { return; }
   ctx.save();
   const fontSize = shape.labelFontSize ?? shapeDefaults.fontSize;
-  const hAlign = shape.labelAlignH ?? "center";
+  const hAlign = shape.labelAlignH ?? defaultHAlign;
   const vAlign = shape.labelAlignV ?? "middle";
   const bounds = shape.getBounds();
   const pad = 8;
@@ -544,9 +546,9 @@ function drawTable(ctx: CanvasRenderingContext2D, shape: TableShape): void {
     for (let c = 0; c < cols; c++) {
       const text = cells[r]?.[c] ?? "";
       if (text) {
-        const cellX = x + c * colW + 6;
+        const cellX = x + c * colW + 4;
         const cellY = y + r * rowH + rowH / 2;
-        ctx.fillText(text, cellX, cellY, colW - 12);
+        ctx.fillText(text, cellX, cellY, colW - 8);
       }
     }
   }

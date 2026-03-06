@@ -7,6 +7,11 @@
         "/^node esbuild\\.mjs --development 2>&1$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "npx vitest": true,
+        "/^node esbuild\\.mjs --development 2>&1; npx vitest run 2>&1$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
